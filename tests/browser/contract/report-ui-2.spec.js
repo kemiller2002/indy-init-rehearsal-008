@@ -100,13 +100,13 @@ test("renders the projection", async ({ page, causa, failures }) => {
     await expect(section.locator("p").first()).toHaveText(/^Not recorded\. The investigation kernel does not record /);
   }
   await expect(sections.nth(1)).toHaveAttribute("data-recorded", "recorded");
-  await expect(sections.nth(1).locator("p").first()).toHaveText(/^1 observation recorded\. Recorded as ObservationRecorded at version 2\./);
+  await expect(sections.nth(1).locator("p").first()).toHaveText(/^1 observation recorded\. Recorded: Observation recorded at version 2\./);
 
   // The chronology: the accepted events, in canonical version order, with their event ids (provenance).
   const rows = report(page).locator("[data-causa-report-chronology] tbody tr");
   await expect(rows).toHaveCount(3);
   await expect(rows.locator("td:nth-child(1)")).toHaveText(["1", "2", "3"]);
-  await expect(rows.locator("td:nth-child(2)")).toHaveText(["InvestigationStarted", "ObservationRecorded", "InvestigationActivated"]);
+  await expect(rows.locator("td:nth-child(2)")).toHaveText(["Investigation started", "Observation recorded", "Investigation activated"]);
   for (const id of await rows.locator("td:nth-child(3)").allTextContents()) expect(id).toMatch(/^[0-9a-f-]{36}$/);
   await expect(sections.nth(1).locator("ef-print-note")).toContainText(await rows.nth(1).locator("td:nth-child(3)").textContent());
 
@@ -114,7 +114,7 @@ test("renders the projection", async ({ page, causa, failures }) => {
   await accept(page, "Record a conclusion");
   await expect(report(page).locator("[data-causa-report-version]")).toHaveText("4");
   const posture = sections.nth(7);
-  await expect(posture.locator("p").first()).toContainText("1 conclusion recorded (ConclusionRecorded at version 4); none is verified.");
+  await expect(posture.locator("p").first()).toContainText("1 conclusion recorded (Conclusion recorded at version 4); none is verified.");
   await expect(posture.locator("p").first()).toContainText("The kernel records no causal link and no root-cause reasoning");
   expect(verificationClaims(await report(page).innerText())).toEqual([]);
 

@@ -33,14 +33,15 @@ let ShimRoundTrip () =
     let started, refused, observed = answers[1], answers[2], answers[3]
 
     // Allowed: one event stamped at the genesis version and evolved into the projection.
-    Assert.Equal("StartInvestigation accepted: InvestigationStarted.", text started "outcomeText")
+    Assert.Equal("Start investigation: done.", text started "outcomeText")
     Assert.Equal(1.0, number started "projectionVersion")
     Assert.Equal("Draft", text started "investigationLifecycle")
-    Assert.Contains("(activation-policy)", text started "capabilityActivateInvestigation")
+    Assert.Contains("Record at least one observation before activating", text started "capabilityActivateInvestigation")
 
     // Refused by the kernel's policy gate, with its reason; the projection is unchanged.
     Assert.Equal("refused", text refused "outcomeState")
-    Assert.Contains("(activation-policy)", text refused "outcomeText")
+    Assert.StartsWith("Activate was not done: Record at least one observation", text refused "outcomeText")
+    Assert.Equal("activation-policy", text refused "outcomeCodes")
     Assert.Equal(1.0, number refused "projectionVersion")
     Assert.Equal(1.0, number refused "timelineCount")
 

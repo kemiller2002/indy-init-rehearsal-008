@@ -102,6 +102,29 @@ export const followPrint = (doc) => {
  */
 export const hostCapabilities = () => [scheduleCapability(), filesCapability()];
 
+/** Pure: the Echelon runtime registry (window.__ECHELON_RUNTIME__) to the report the engine reads, name to version. */
+export const runtimeReportOf = (registry) => {
+  const libraries = registry && typeof registry.libraries === "object" && registry.libraries !== null ? registry.libraries : {};
+  return JSON.stringify({
+    libraries: Object.fromEntries(
+      Object.entries(libraries)
+        .filter(([, entry]) => typeof entry?.version === "string")
+        .map(([name, entry]) => [name, { version: entry.version }])
+    )
+  });
+};
+
+/**
+ * WI-R8-T29: reports, as data, which Echelon libraries registered themselves on this page (the Limen event
+ * "runtime.reported" bound in index.html). The engine decides what Administration shows (Views/Administration.fs).
+ */
+export const reportRuntime = (doc) => {
+  const input = doc.querySelector("[data-causa-runtime-report]");
+  if (!input) return;
+  input.value = runtimeReportOf(doc.defaultView?.__ECHELON_RUNTIME__);
+  input.dispatchEvent(new Event("change", { bubbles: true }));
+};
+
 /** Boots the page: loading shell, then the engine through Limen, then handoff or failure. */
 export const boot = async (doc = document, startEngine = startDotnetEngine) => {
   show(doc, "loading");
@@ -129,6 +152,7 @@ export const boot = async (doc = document, startEngine = startDotnetEngine) => {
   try {
     await withDeadline(Promise.all([kernel.start(), firstAnswer]), startDeadlineMs);
     if (!ready) show(doc, "failed");
+    else reportRuntime(doc);
   } catch (error) {
     console.error("Causa boundary:", error);
     if (!ready) show(doc, "failed");

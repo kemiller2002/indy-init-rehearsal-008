@@ -107,11 +107,11 @@ test("time travel and semantic diff", async ({ page, causa, failures }) => {
   // The aggregate-version timeline with event summaries, in canonical version order (ADRP-007-O2).
   const timeline = history(page).locator("[data-causa-history-timeline] li");
   await expect(timeline).toHaveText([
-    "Version 1: Investigation started (InvestigationStarted).",
-    "Version 2: Observation recorded (ObservationRecorded).",
-    "Version 3: Observation recorded (ObservationRecorded).",
-    "Version 4: Investigation activated (InvestigationActivated).",
-    "Version 5: Conclusion recorded (ConclusionRecorded)."
+    "Version 1: Investigation started.",
+    "Version 2: Observation recorded.",
+    "Version 3: Observation recorded.",
+    "Version 4: Investigation activated.",
+    "Version 5: Conclusion recorded."
   ]);
   await expect(history(page)).toHaveAttribute("data-history-mode", "latest");
   await expect(history(page).locator("[data-causa-history-at]")).toHaveText("5");
@@ -132,8 +132,8 @@ test("time travel and semantic diff", async ({ page, causa, failures }) => {
   // The semantic diff from version 2 to the latest, in the kernel's terms; nothing inferred.
   const diff = history(page).locator("[data-causa-history-diff] li");
   await expect(diff.filter({ hasText: "Lifecycle: Draft to Active." })).toHaveCount(1);
-  await expect(diff.filter({ hasText: "Added Observation 2 (ObservationRecorded, version 3)." })).toHaveCount(1);
-  await expect(diff.filter({ hasText: "Added Conclusion 1 (ConclusionRecorded, version 5)." })).toHaveCount(1);
+  await expect(diff.filter({ hasText: "Added Observation 2 (version 3)." })).toHaveCount(1);
+  await expect(diff.filter({ hasText: "Added Conclusion 1 (version 5)." })).toHaveCount(1);
   await expect(diff.filter({ hasText: "Added Observation 1" })).toHaveCount(0);
   await expect(history(page).locator("[data-causa-history-diff-summary]")).toHaveText(/^From version 2 to version 5: \d+ changes\.$/);
   await expect(history(page).locator("[data-causa-history-policy]")).toContainText("No policy or domain-version change");

@@ -241,6 +241,8 @@ module Program =
                 Hash = if Routes.isRouteHash hash then hash else state.Hash }
         | Incoming.Event((Views.History.SelectEvent | Views.History.LatestEvent) as name, value) ->
             { state with History = Views.History.select state.Workspace.History state.History name value }
+        | Incoming.Event(name, value) when name = Views.Administration.ReportEvent ->
+            { state with Loaded = Views.Administration.report value }
         | Incoming.Event(name, _) ->
             match Workspace.commandOfEvent name with
             | Some command -> { state with Workspace = Submit.command state.Workspace command }
@@ -472,9 +474,13 @@ module Program =
             | Some history -> { tab.Shell with Workspace = { tab.Shell.Workspace with History = history; Last = None } }
             | None -> tab.Shell
 
-        let shell = View.render shellState |> List.filter (fun (k, _) -> not (replaced.Contains k))
+        // WI-R8-T29: Administration and Settings report the engine's connection state, never the shell's default.
+        let admin = View.administrationKeys tab.Engine.Connection shellState
+        let adminNames = admin |> List.map fst |> Set.ofList
+        let shell =
+            View.render shellState |> List.filter (fun (k, _) -> not (replaced.Contains k || adminNames.Contains k))
         let shellNames = shell |> List.map fst |> Set.ofList
-        let added = engineKeys |> List.filter (fun (k, _) -> not (shellNames.Contains k))
+        let added = engineKeys |> List.filter (fun (k, _) -> not (shellNames.Contains k || adminNames.Contains k))
         // WI-R8-CAPS: the token fields are mounted (data-if) only while a token is being typed for Connect
         // (Disconnected) or Reconnect (CredentialRefused). Once Connect or Reconnect has made the credential the field
         // leaves the DOM, so the typed token does not linger there, and it returns empty.
@@ -482,7 +488,7 @@ module Program =
             [ "connectTokenShown", Flag(tab.Engine.Connection = Disconnected)
               "reconnectTokenShown", Flag(tab.Engine.Connection = CredentialRefused) ]
 
-        shell @ added @ tokenFields @ [ "liveAnnouncement", Text(String.concat " " announcements) ]
+        shell @ admin @ added @ tokenFields @ [ "liveAnnouncement", Text(String.concat " " announcements) ]
 
     let private writeValue (w: Utf8JsonWriter) (name: string) (value: ViewValue) =
         match value with

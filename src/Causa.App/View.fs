@@ -35,7 +35,9 @@ type ShellState =
       Hash: string
       Workspace: Workspace
       /// WI-R8-T28: the version the history region shows (read-only time travel; it never changes Workspace).
-      History: Views.History.Selection }
+      History: Views.History.Selection
+      /// WI-R8-T29: what the browser reported it loaded (Views/Administration.fs, Limen event "runtime.reported").
+      Loaded: Views.Administration.BrowserReport }
 
 [<RequireQualifiedAccess>]
 module Workspace =
@@ -76,7 +78,8 @@ module View =
           Path = "/"
           Hash = ""
           Workspace = Workspace.empty
-          History = Views.History.Latest }
+          History = Views.History.Latest
+          Loaded = Views.Administration.notReported }
 
     /// The page link of the tab-local investigation (it lives on the start screen until it is saved).
     let private tabInvestigationHref = Routes.format AppRoute.InvestigationStart
@@ -122,6 +125,15 @@ module View =
         let history = Views.History.project Workspace.policy Workspace.actor state.Workspace.History state.History
         flat history.Keys @ (history.Lists |> List.map (fun (name, rows) -> name, Rows rows))
 
+    /// The Administration and Settings keys and lists (Views/Administration.fs, ui-2, WI-R8-T29): the actually loaded
+    /// versions and the operational status for the connection the caller knows (render: the tab-local shell, which
+    /// has none; Program.renderTab: the engine's own connection state).
+    let administrationKeys (connection: ConnectionState) (state: ShellState) : ShellView =
+        let admin =
+            Views.Administration.view Views.Administration.loadedEngine state.Loaded connection state.Workspace.History
+
+        flat admin.Keys @ (admin.Lists |> List.map (fun (name, rows) -> name, Rows rows))
+
     /// Pure: state to the complete view.
     let render (state: ShellState) : ShellView =
         [ "engine", Text EngineName
@@ -134,3 +146,4 @@ module View =
         @ graphKeys state.Workspace
         @ reportKeys state.Workspace
         @ historyKeys state
+        @ administrationKeys Disconnected state

@@ -83,20 +83,7 @@ module History =
         | Latest -> latest
         | At v -> min v latest
 
-    let private sentence (event: DomainEvent) =
-        match event with
-        | InvestigationStarted -> "Investigation started"
-        | InvestigationRenamed -> "Investigation renamed"
-        | InvestigationActivated -> "Investigation activated"
-        | InvestigationMarkedAwaitingEvidence -> "Marked awaiting evidence"
-        | InvestigationMarkedAwaitingVerification -> "Marked awaiting verification"
-        | InvestigationResolved -> "Investigation resolved"
-        | InvestigationClosed -> "Investigation closed"
-        | InvestigationReopened -> "Investigation reopened"
-        | InvestigationArchived -> "Investigation archived"
-        | ObservationRecorded -> "Observation recorded"
-        | HypothesisRecorded -> "Hypothesis recorded"
-        | ConclusionRecorded -> "Conclusion recorded"
+    let private sentence = Report.eventSentence
 
     /// Pure: the aggregate-version timeline with event summaries.
     let timeline (history: EventEnvelope list) : TimelineEntry list =
@@ -107,7 +94,7 @@ module History =
             { Version = versionOf e.Version
               EventId = id.ToString "D"
               Kind = kind
-              Summary = DomainEvent.ofPayload e.Payload |> Option.map sentence |> Option.defaultValue kind })
+              Summary = DomainEvent.ofPayload e.Payload |> Option.map sentence |> Option.defaultValue "An event this version of Causa does not describe" })
 
     /// The events up to and including a version: the history as it stood then.
     let prefix (version: int64) (history: EventEnvelope list) =
@@ -132,7 +119,7 @@ module History =
                 { Version = version
                   State = None
                   Capabilities = []
-                  Fault = Some(sprintf "The history does not replay to version %d: %A" version error) }
+                  Fault = Some(sprintf "The history cannot be shown at version %d: %A" version error) }
 
     let private codes (availability: Availability) =
         match availability with
@@ -210,15 +197,19 @@ module History =
 
     // ---- Words: every sentence is built from kernel values. ----
 
+    /// A command in the words a person reads (UI-024-O5); the command's name stays as data (row key) only.
+    let commandLabel = Causa.App.PresentationLanguage.commandLabel
+
+    /// Availability in words; the kernel's blocker codes stay as data (the capability row's "codes" field).
     let private availabilityText (availability: Availability) =
         match availability with
         | Available -> "available"
-        | Unavailable _ -> sprintf "unavailable (%s)" (codes availability |> String.concat ", ")
+        | Unavailable _ -> "not available"
 
     let private commandsText (commands: Command list) =
         match commands with
         | [] -> "none"
-        | cs -> cs |> List.map Command.name |> String.concat ", "
+        | cs -> cs |> List.map commandLabel |> String.concat ", "
 
     let changeCategory (change: Change) =
         match change with
@@ -230,13 +221,13 @@ module History =
     let changeText (change: Change) =
         match change with
         | LifecycleChange(b, a) -> sprintf "Lifecycle: %s to %s." (Graph.lifecycleName b) (Graph.lifecycleName a)
-        | EntryAdded(role, n, kind, v) -> sprintf "Added %s %d (%s, version %d)." (Graph.roleName role) n kind v
-        | CapabilityChange(c, b, a) -> sprintf "%s: %s to %s." (Command.name c) (availabilityText b) (availabilityText a)
-        | PostureChange(b, a) -> sprintf "Next legal actions: %s to %s." (commandsText b) (commandsText a)
+        | EntryAdded(role, n, _, v) -> sprintf "Added %s %d (version %d)." (Graph.roleName role) n v
+        | CapabilityChange(c, b, a) -> sprintf "%s: %s to %s." (commandLabel c) (availabilityText b) (availabilityText a)
+        | PostureChange(b, a) -> sprintf "Next possible actions: %s to %s." (commandsText b) (commandsText a)
 
     /// The kernel's history carries no policy or domain-version event, and every version replays under one policy.
     let policyText (policy: PolicySet) =
-        sprintf "No policy or domain-version change: the history records none; every version replays under policy %s." policy.Id
+        sprintf "No policy or domain-version change: the history records none; every version is read under policy %s." policy.Id
 
     let supersessionText =
         "No entry removed by supersession: this investigation's kernel records no supersession event."
@@ -318,11 +309,13 @@ module History =
           "kind", entry.Kind
           "summary", entry.Summary
           "current", (if entry.Version = selected then "true" else "false")
-          "text", sprintf "Version %d: %s (%s)." entry.Version entry.Summary entry.Kind ]
+          "text", sprintf "Version %d: %s." entry.Version entry.Summary ]
 
     let private capabilityRow (c: Capability) : Graph.Row =
-        let name = Command.name c.Command
-        [ "key", name; "command", name; "availability", availabilityText c.Availability ]
+        [ "key", Command.name c.Command
+          "command", commandLabel c.Command
+          "availability", availabilityText c.Availability
+          "codes", codes c.Availability |> String.concat " " ]
 
     let private changeRow (i: int) (change: Change) : Graph.Row =
         [ "key", sprintf "change-%d" i; "category", changeCategory change; "text", changeText change ]

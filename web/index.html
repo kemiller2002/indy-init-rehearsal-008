@@ -23,6 +23,7 @@
   </script>
   <script type="module" src="./node_modules/@echelon-foundry/forma-workflow/dist/forma-workflow.js"></script>
   <script type="module" src="./node_modules/@echelon-foundry/print-components/src/components/register.js"></script>
+  <script type="module" src="./node_modules/@echelon-foundry/design-system/dist/runtime.js"></script>
   <script type="module" src="./boundary.js"></script>
 </head>
 <body>
@@ -45,6 +46,8 @@
   <!-- Application root: every binding below is projected by the F# engine (Causa.App View.fs, Views/Shell.fs).
        Forma patterns: skip-link, site-header, status-lozenge, navigation-shell, empty-state (layout contract reuse). -->
   <div class="causa-app" data-causa-app hidden>
+    <!-- WI-R8-T29: boundary.js reports the Echelon libraries the page loaded through this Limen event (data, no decision). -->
+    <input type="hidden" data-causa-runtime-report data-event="runtime.reported" data-on="change">
     <a class="ef-skip-link" href="#causa-main">Skip to main content</a>
     <header class="ef-site-header causa-masthead">
       <div class="ef-site-header__inner">
@@ -173,7 +176,7 @@
               <span data-text="timelineLatest" data-causa-timeline-latest>No events</span>.
               <span data-text="timelineList" data-causa-timeline-list></span>
             </p>
-            <p class="causa-outcome" role="status" aria-live="polite" data-causa-outcome data-bind-data-outcome="outcomeState" data-text="outcomeText">No command sent yet.</p>
+            <p class="causa-outcome" role="status" aria-live="polite" data-causa-outcome data-bind-data-outcome="outcomeState" data-bind-data-blocker-codes="outcomeCodes" data-text="outcomeText">No command sent yet.</p>
             <p role="alert" data-bind-hidden="projectionFaultHidden" data-text="projectionFault" hidden></p>
             <section aria-labelledby="causa-observations-heading" data-causa-region="observations" data-bind-data-projection-version="projectionVersion" data-bind-hidden="regionObservationsHidden">
               <h4 id="causa-observations-heading">Observations</h4>
@@ -194,7 +197,7 @@
             </section>
             <section aria-labelledby="causa-blockers-heading" data-causa-region="blockers" data-bind-data-projection-version="projectionVersion" data-bind-hidden="regionBlockersHidden">
               <h4 id="causa-blockers-heading">Blockers and next actions</h4>
-              <p>Blockers: <span data-text="blockerCount" data-causa-blocker-count>0</span>. <span data-text="blockerList"></span></p>
+              <p>Blockers: <span data-text="blockerCount" data-causa-blocker-count>0</span>. <span data-text="blockerList" data-bind-data-blocker-codes="blockerCodes"></span></p>
               <p>Next: <span data-text="nextActions" data-causa-next-actions></span></p>
             </section>
             <aside aria-labelledby="causa-inspector-heading" data-causa-region="inspector" data-bind-data-projection-version="projectionVersion" data-bind-hidden="inspectorHidden" hidden>
@@ -340,14 +343,36 @@
         <section aria-labelledby="causa-investigation-heading" data-bind-hidden="screenInvestigationHidden" hidden>
           <h2 id="causa-investigation-heading">Investigation</h2>
           <p>This investigation has not been loaded in this tab.</p>
+          <p data-causa-unloaded-detail data-text="unloadedDetail"></p>
+          <p data-bind-hidden="unloadedActionHidden"><a data-causa-unloaded-action data-bind-href="unloadedActionHref" data-text="unloadedActionLabel" href="#/">Connect data repository</a></p>
         </section>
         <section aria-labelledby="causa-admin-heading" data-bind-hidden="screenAdministrationHidden" hidden>
           <h2 id="causa-admin-heading">Operations</h2>
           <p>Connection, storage and diagnostics for this tab.</p>
+          <!-- WI-R8-T29 (UI-018, VER-007): read-only facts projected by Views/Administration.fs. A version appears only
+               when the loaded component reports it; anything else says unknown, not available or failed in words. -->
+          <p data-causa-admin-summary>Verified <span data-text="adminVerifiedCount">0</span>, unknown <span data-text="adminUnknownCount">0</span>, not available <span data-text="adminUnavailableCount">0</span>, failed <span data-text="adminFailedCount">0</span>.</p>
+          <table class="causa-admin-facts" data-causa-admin-versions aria-labelledby="causa-admin-versions-heading">
+            <caption id="causa-admin-versions-heading">Loaded versions</caption>
+            <thead><tr><th scope="col">Component</th><th scope="col">State</th><th scope="col">Version or reason</th><th scope="col">Reported by</th></tr></thead>
+            <tbody><template data-each="adminVersions" data-key="key"><tr data-bind-data-fact="key" data-bind-data-state="state"><th scope="row" data-text="label"></th> <td data-text="state"></td> <td data-text="value"></td> <td data-text="source"></td></tr></template></tbody>
+          </table>
+          <table class="causa-admin-facts" data-causa-admin-status aria-labelledby="causa-admin-status-heading">
+            <caption id="causa-admin-status-heading">Status</caption>
+            <thead><tr><th scope="col">Check</th><th scope="col">State</th><th scope="col">Result or reason</th><th scope="col">Reported by</th></tr></thead>
+            <tbody><template data-each="adminStatus" data-key="key"><tr data-bind-data-fact="key" data-bind-data-state="state"><th scope="row" data-text="label"></th> <td data-text="state"></td> <td data-text="value"></td> <td data-text="source"></td></tr></template></tbody>
+          </table>
         </section>
         <section aria-labelledby="causa-settings-heading" data-bind-hidden="screenSettingsHidden" hidden>
           <h2 id="causa-settings-heading">Preferences</h2>
           <p>Preferences for this browser.</p>
+          <!-- WI-R8-T29 (UI-019): only the settings this version supports, each with its effective value and scope.
+               None is adjustable in Causa, so there is no control here. -->
+          <table class="causa-admin-facts" data-causa-settings aria-labelledby="causa-settings-table-heading">
+            <caption id="causa-settings-table-heading">Settings in effect</caption>
+            <thead><tr><th scope="col">Setting</th><th scope="col">Effective value</th><th scope="col">Scope</th><th scope="col">Note</th></tr></thead>
+            <tbody><template data-each="settingsRows" data-key="key"><tr data-bind-data-setting="key"><th scope="row" data-text="label"></th> <td data-text="effective"></td> <td data-text="scope"></td> <td data-text="note"></td></tr></template></tbody>
+          </table>
         </section>
         <section class="ef-empty-state" aria-labelledby="causa-not-found" data-bind-hidden="screenNotFoundHidden" hidden>
           <h2 id="causa-not-found">Nothing exists at this address</h2>
