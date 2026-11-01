@@ -1,0 +1,88 @@
+// Owner: integration. The browser boundary of Causa (KD-010): it loads the .NET WebAssembly engine, wraps its one
+// [JSExport] in a Limen EngineTransport and starts the Limen BrowserKernel. It keeps no application state and makes
+// no application decision: what is shown comes from the engine's projection (Causa.App View.fs).
+//
+// Page states (html[data-engine]): "loading" until the engine's first projection says engineReady, then "ready";
+// "failed" when the runtime cannot start or the start exceeds the deadline (WASM-LOAD-003/004/005).
+import { BrowserKernel } from "@echelon-foundry/limen";
+
+/** How long the engine may take to answer Initialize before the page offers Retry. */
+export const startDeadlineMs = 30_000;
+
+/** Pure: the page state a Limen answer implies. */
+export const pageStateOf = (answer) => (answer?.view?.engineReady === true ? "ready" : "loading");
+
+/** Pure: an EngineTransport over a string-in/string-out engine function, reporting each answer to `observe`. */
+export const jsonTransport = (start, observe) => {
+  let dispatchJson = null;
+  return {
+    async start() {
+      dispatchJson = await start();
+    },
+    async dispatch(message) {
+      const answer = JSON.parse(dispatchJson(JSON.stringify(message)));
+      observe(answer);
+      return answer;
+    }
+  };
+};
+
+/** Loads the .NET runtime from ./_framework and returns the engine's Dispatch export. */
+export const startDotnetEngine = async (frameworkUrl = "./_framework/dotnet.js") => {
+  const { dotnet } = await import(frameworkUrl);
+  const runtime = await dotnet.create();
+  const exports = await runtime.getAssemblyExports(runtime.getConfig().mainAssemblyName);
+  return (json) => exports.Causa.Host.HostShim.Dispatch(json);
+};
+
+const withDeadline = (promise, ms) =>
+  Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("engine start deadline exceeded")), ms))
+  ]);
+
+const show = (doc, state) => {
+  doc.documentElement.dataset.engine = state;
+  const loading = doc.querySelector("[data-causa-loading]");
+  const app = doc.querySelector("[data-causa-app]");
+  const failed = doc.querySelector("[data-causa-load-failed]");
+  const status = doc.querySelector("[data-causa-load-status]");
+  if (app) app.hidden = state !== "ready";
+  if (loading) loading.hidden = state === "ready";
+  if (failed) failed.hidden = state !== "failed";
+  if (status) status.textContent = state === "failed" ? "Causa could not start." : "Starting Causa…";
+};
+
+/** Boots the page: loading shell, then the engine through Limen, then handoff or failure. */
+export const boot = async (doc = document, startEngine = startDotnetEngine) => {
+  show(doc, "loading");
+  doc.querySelector("[data-causa-retry]")?.addEventListener("click", () => doc.defaultView?.location.reload());
+  let ready = false;
+  let started = null;
+  const firstAnswer = new Promise((resolve) => (started = resolve));
+  const transport = jsonTransport(startEngine, (answer) => {
+    if (!ready && pageStateOf(answer) === "ready") {
+      ready = true;
+      show(doc, "ready");
+    }
+    started(answer);
+  });
+  const kernel = new BrowserKernel(transport, doc, {
+    report(event) {
+      if (event.kind === "BridgeError") {
+        console.error("Causa boundary:", event.phase, event.detail);
+        if (!ready) show(doc, "failed");
+      }
+    }
+  });
+  try {
+    await withDeadline(Promise.all([kernel.start(), firstAnswer]), startDeadlineMs);
+    if (!ready) show(doc, "failed");
+  } catch (error) {
+    console.error("Causa boundary:", error);
+    if (!ready) show(doc, "failed");
+  }
+  return kernel;
+};
+
+if (typeof document !== "undefined" && !globalThis.__CAUSA_NO_AUTOBOOT__) boot();
