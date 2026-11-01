@@ -59,7 +59,7 @@ jobs:
       - name: Test Causa.slnx (non-live suites)
         run: |
           set -uo pipefail
-          output=$(dotnet test Causa.slnx -c Release --no-build --filter "FullyQualifiedName!~.Live." --logger trx --results-directory TestResults 2>&1)
+          output=$(dotnet test Causa.slnx -c Release --no-build --filter "FullyQualifiedName!~.Live.&FullyQualifiedName!~Causa.Invariants." --logger trx --results-directory TestResults 2>&1)
           status=$?
           echo "$output"
           if [ "$status" -ne 0 ]; then exit "$status"; fi
@@ -71,6 +71,28 @@ jobs:
           if echo "$output" | grep -qE 'Skipped:[[:space:]]*[1-9]|Skipping:'; then
             echo "::error::Tests were skipped. A run that skips tests is not a pass."; exit 1
           fi
+
+      # Invariant tests are written first (T12) and bind to implementations as each owner lands it
+      # (tests/Causa.Invariants/Model/INV08.fs `Bindings`). They run here every time and the counts are
+      # published, but this step is not part of the merge gate until the release candidate: the
+      # coordinator's merge rule is a ratchet (a PR may not raise the failure count), and T31 requires
+      # every invariant to pass. Nothing is skipped or filtered out of this run. See evidence/DEVIATIONS.md DEV-R8-06.
+      - name: Invariant suite (ratchet; reported, not gated until T31)
+        id: invariants
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          output=$(dotnet test tests/Causa.Invariants -c Release --no-build --filter "FullyQualifiedName!~.Live." --logger "trx;LogFileName=invariants.trx" --results-directory TestResults 2>&1)
+          status=$?
+          echo "$output" | tail -40
+          echo "$output" | grep -E 'Passed!|Failed!' | tee TestResults/invariants-summary.txt
+          {
+            echo "### Invariant suite (ratchet)"
+            echo '```'
+            echo "$output" | grep -E 'Passed!|Failed!'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
 
       - name: Upload test results and the stack-lock report
         if: always()
