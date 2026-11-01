@@ -41,7 +41,11 @@ test("UI-016-O8", async ({ page, causa }) => {
   // causal graph, WI-R8-T23) read but never define. The engine sets them on the diagrams it lays out.
   const workflowCss = await (await page.request.get("/dist/node_modules/@echelon-foundry/forma-workflow/dist/forma-workflow.css")).text();
   const hooks = [...new Set([...`${css}\n${workflowCss}`.matchAll(/var\(\s*(--ef-[a-z0-9-]+)/g)].map((m) => m[1]))].filter((p) => !inventory.includes(p));
-  expect(await onlyFormaTokens(page, { inventory, hooks, formaHref: "/design-system/dist/all.css" })).toEqual([]);
+  // Folio's print tokens: the locked print system (@echelon-foundry/print-components 0.4.1, R12.1, WI-R8-T26) defines
+  // and reads its own --ef-print-* properties in its print stylesheet. Causa's own stylesheet still declares none (below).
+  const folioCss = await (await page.request.get("/dist/node_modules/@echelon-foundry/print-components/src/styles/print.css")).text();
+  const folio = [...new Set([...folioCss.matchAll(/(--ef-print-[a-z0-9-]+)/g)].map((m) => m[1]))];
+  expect(await onlyFormaTokens(page, { inventory, hooks: [...hooks, ...folio], formaHref: "/design-system/dist/all.css" })).toEqual([]);
   // The shell's colours resolve to Forma's semantic tokens, not literals.
   expect(await rgbOf(page, ".causa-masthead", "backgroundColor")).toEqual(
     await page.evaluate((t) => { const d = document.createElement("div"); d.style.color = `var(${t})`; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c; }, "--ef-color-surface-inverse").then(async (c) => {
