@@ -91,7 +91,7 @@ module Report =
         section
             "Source investigation"
             [ $"Investigation {guidText id}, version {versionOf state.Version}, lifecycle {Graph.lifecycleName state.Lifecycle}."
-              $"""{kindName kind}, projected from {plural history.Length "accepted event" "accepted events"} replayed by the domain kernel.""" ]
+              $"""{kindName kind}, built from {plural history.Length "accepted event" "accepted events"} recorded in this investigation.""" ]
             []
 
     let private chronologySection (history: EventEnvelope list) =
