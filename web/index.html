@@ -6,7 +6,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Causa</title>
+  <title data-text="pageTitle">Causa</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23345' stroke-width='4'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23345'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./node_modules/@echelon-foundry/design-system/dist/all.css">
   <link rel="stylesheet" href="./causa.css">
@@ -36,11 +36,84 @@
     </div>
   </section>
 
-  <!-- Application root: every binding below is projected by the F# engine (Causa.App View.fs). -->
-  <main class="causa-app" data-causa-app hidden>
-    <h1>Causa</h1>
-    <p data-text="status">Loading Causa</p>
-    <p hidden>Engine <span data-text="engine"></span> at <span data-text="path"></span></p>
-  </main>
+  <!-- Application root: every binding below is projected by the F# engine (Causa.App View.fs, Views/Shell.fs).
+       Forma patterns: skip-link, site-header, status-lozenge, navigation-shell, empty-state (layout contract reuse). -->
+  <div class="causa-app" data-causa-app hidden>
+    <a class="ef-skip-link" href="#causa-main">Skip to main content</a>
+    <header class="ef-site-header causa-masthead">
+      <div class="ef-site-header__inner">
+        <div class="ef-site-header__identity">
+          <a class="ef-site-header__brand" href="#/">
+            <svg class="causa-mark causa-mark-small" viewBox="0 0 32 32" aria-hidden="true" focusable="false">
+              <circle cx="16" cy="16" r="13" fill="none" stroke="currentColor" stroke-width="4"/>
+              <circle cx="16" cy="16" r="4" fill="currentColor"/>
+            </svg>
+            <span class="ef-site-header__name">Causa</span>
+          </a>
+        </div>
+        <p class="causa-sync">Sync: <span class="ef-status-lozenge" data-state="unknown" data-text="syncLabel">Not connected</span></p>
+        <p class="ef-visually-hidden" role="status" data-text="status">Loading Causa</p>
+      </div>
+    </header>
+    <div class="ef-navigation-shell causa-shell">
+      <details class="ef-navigation-shell__compact">
+        <summary>Navigation</summary>
+        <nav aria-label="Primary">
+          <a href="#/" data-bind-aria-current="navInvestigationsCurrent">Investigations</a>
+          <a href="#/administration" data-bind-aria-current="navAdministrationCurrent">Administration</a>
+          <a href="#/settings" data-bind-aria-current="navSettingsCurrent">Settings</a>
+        </nav>
+      </details>
+      <nav class="ef-navigation-shell__persistent" aria-label="Primary">
+        <a href="#/" data-bind-aria-current="navInvestigationsCurrent">Investigations</a>
+        <a href="#/administration" data-bind-aria-current="navAdministrationCurrent">Administration</a>
+        <a href="#/settings" data-bind-aria-current="navSettingsCurrent">Settings</a>
+      </nav>
+      <main class="ef-navigation-shell__content" id="causa-main" tabindex="-1">
+        <header class="causa-investigation-header" data-bind-hidden="investigationNavHidden" hidden>
+          <p class="causa-investigation-context">
+            <a data-bind-href="investigationHref" href="#/" data-text="investigationLabel"></a>
+            <span>Repository: <span data-text="investigationRepository"></span></span>
+          </p>
+          <nav class="causa-investigation-nav" aria-label="Investigation">
+            <a data-bind-href="tabOverviewHref" href="#/" data-bind-aria-current="tabOverviewCurrent">Overview</a>
+            <a data-bind-href="tabCausalAnalysisHref" href="#/" data-bind-aria-current="tabCausalAnalysisCurrent">Causal Analysis</a>
+            <a data-bind-href="tabEvidenceHref" href="#/" data-bind-aria-current="tabEvidenceCurrent">Evidence</a>
+            <a data-bind-href="tabHypothesesHref" href="#/" data-bind-aria-current="tabHypothesesCurrent">Hypotheses</a>
+            <a data-bind-href="tabTimelineHref" href="#/" data-bind-aria-current="tabTimelineCurrent">Timeline</a>
+            <a data-bind-href="tabCorrectiveActionsHref" href="#/" data-bind-aria-current="tabCorrectiveActionsCurrent">Corrective Actions</a>
+          </nav>
+        </header>
+        <h1 data-text="screenTitle">Investigations</h1>
+        <p hidden>Engine <span data-text="engine"></span> at <span data-text="path"></span>; screen <span data-causa-screen data-text="screen"></span></p>
+        <section class="ef-empty-state" aria-labelledby="causa-home-empty" data-bind-hidden="screenHomeHidden">
+          <h2 id="causa-home-empty">No investigation is open in this tab</h2>
+          <p>Start an investigation, or open a link to one you were given.</p>
+          <a href="#/investigations/new">Start an investigation</a>
+        </section>
+        <section aria-labelledby="causa-start-heading" data-bind-hidden="screenInvestigationStartHidden" hidden>
+          <h2 id="causa-start-heading">New investigation</h2>
+          <p>Connect a repository to save a new investigation.</p>
+        </section>
+        <section aria-labelledby="causa-investigation-heading" data-bind-hidden="screenInvestigationHidden" hidden>
+          <h2 id="causa-investigation-heading">Investigation</h2>
+          <p>This investigation has not been loaded in this tab.</p>
+        </section>
+        <section aria-labelledby="causa-admin-heading" data-bind-hidden="screenAdministrationHidden" hidden>
+          <h2 id="causa-admin-heading">Operations</h2>
+          <p>Connection, storage and diagnostics for this tab.</p>
+        </section>
+        <section aria-labelledby="causa-settings-heading" data-bind-hidden="screenSettingsHidden" hidden>
+          <h2 id="causa-settings-heading">Preferences</h2>
+          <p>Preferences for this browser.</p>
+        </section>
+        <section class="ef-empty-state" aria-labelledby="causa-not-found" data-bind-hidden="screenNotFoundHidden" hidden>
+          <h2 id="causa-not-found">Nothing exists at this address</h2>
+          <p>The link may be mistyped, or it names something that is not part of Causa.</p>
+          <a href="#/">Go to Investigations</a>
+        </section>
+      </main>
+    </div>
+  </div>
 </body>
 </html>
