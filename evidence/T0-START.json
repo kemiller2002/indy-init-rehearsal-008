@@ -1,0 +1,23 @@
+{
+  "schema": "indy-init.rehearsal-start/1",
+  "rehearsal": "008",
+  "planOfRecord": "indy-init-requirements-v4.1.1",
+  "planCommit": "f85081f8321e773ee5a564d183930e8fab20ef55",
+  "packageManifestSha256": "77d15f555c215d66569db6802f8d291a1b13dfaa9f0a99d974b748a3fbc3afa0",
+  "approvals": ["APR-V411-OWNER-1", "APR-V411-OWNER-2"],
+  "t0": "2026-11-01T17:31:24Z",
+  "deadline": "2026-11-02T00:31:24Z",
+  "windowMinutes": 420,
+  "topology": "C-role-lanes-two-ui",
+  "language": "F#",
+  "hostTools": {"conditor": "0.10.18", "praxis": "3.24.0", "ordo": "1.19.0", "percepta-repo": "0.1.0", "percepta": "0.3.0", "dokimos": "0.9.0", "dotnetSdk": "10.0.402"},
+  "coordinatorSession": "b8f653b4-4ecb-54ef-821b-bb1e340e0d38",
+  "deviations": [
+    {"id": "DEV-R8-01", "rule": "STARTING-STATE: the competition repository does not exist before T0 and starts empty",
+     "actual": "kemiller2002/indy-init-rehearsal-008 already existed (created 2026-10-30 by the owner) with one commit 0fc18ea 'Initial commit' (README.md) and branch credential-probe. The owner directed its use on 2026-11-01. It was not deleted or overwritten; the bootstrap commit is placed on top of 0fc18ea and pushed as a fast-forward. The repository was not created at T0."},
+    {"id": "DEV-R8-02", "rule": "AGENT-RULES duty 1 / T10: publish with 'conditor repo create'",
+     "actual": "Conditor refuses an existing repository ('Conditor never adopts or overwrites an existing repository'). This session also cannot create GitHub repositories. Publishing is a plain git push to the existing remote; GitHub Pages is configured separately."},
+    {"id": "DEV-R8-03", "rule": "environment",
+     "actual": "conditor init fails in this container while GH_TOKEN/GITHUB_TOKEN are set (public percepta fetch hits a credential prompt); it is run with both unset, matching analysis/bootstrap-measurement.json."}
+  ]
+}
