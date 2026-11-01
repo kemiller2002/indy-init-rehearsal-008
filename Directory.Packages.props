@@ -6,5 +6,12 @@
     <PackageVersion Include="xunit" Version="2.9.2" />
     <PackageVersion Include="xunit.runner.visualstudio" Version="2.8.2" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <!-- The F# runtime at exactly the version the SDK references implicitly (FSCorePackageVersion of SDK 10.0.402).
+         Central package management disables the implicit reference, which left FSharp.Core out of every Causa
+         output, so every Causa test assembly was skipped (CR-2 from WI-R8-T14; DEV-R8-04, for owner ratification). -->
+    <PackageVersion Include="FSharp.Core" Version="10.1.402" />
+  </ItemGroup>
+  <ItemGroup Condition="$(MSBuildProjectName.StartsWith('Causa.')) and '$(MSBuildProjectExtension)' == '.fsproj'">
+    <PackageReference Include="FSharp.Core" />
   </ItemGroup>
 </Project>
