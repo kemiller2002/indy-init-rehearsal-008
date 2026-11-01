@@ -9,15 +9,15 @@
     "localId": "WI-R8-T17"
   },
   "instanceId": "pxi-c8a0bad8c5ad4d35b2bb34ceb821de15",
-  "status": "active",
+  "status": "finalized",
   "startedAt": "2026-11-01T18:50:58.595Z",
-  "finalizedAt": null,
+  "finalizedAt": "2026-11-01T18:52:45.601Z",
   "identity": {
     "provider": "anthropic",
-    "model": null,
+    "model": "claude-opus-5-5",
     "modelVersion": null,
     "runtime": "claude-code",
-    "runtimeVersion": null,
+    "runtimeVersion": "2.1.316",
     "sessionId": "b8f653b4-4ecb-54ef-821b-bb1e340e0d38",
     "conversationId": null,
     "runId": null,
@@ -52,6 +52,13 @@
         "type": "ros-git",
         "name": "git",
         "mechanism": "repository-baseline"
+      },
+      {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
       }
     ]
   },
@@ -66,25 +73,81 @@
   "capabilities": [
     {
       "metricId": "tokens.input",
-      "status": "supported-unavailable",
-      "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.640Z",
+      "history": [
+        {
+          "status": "supported-unavailable",
+          "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.592Z"
+        }
+      ]
     },
     {
       "metricId": "tokens.output",
-      "status": "supported-unavailable",
-      "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.641Z",
+      "history": [
+        {
+          "status": "supported-unavailable",
+          "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript; a lower bound: the transcript records the streaming-start count, not the provider's final count",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.593Z"
+        }
+      ]
     },
     {
       "metricId": "tokens.cached_input",
@@ -110,58 +173,198 @@
     },
     {
       "metricId": "tokens.cache_read",
-      "status": "supported-unavailable",
-      "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.643Z",
+      "history": [
+        {
+          "status": "supported-unavailable",
+          "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.594Z"
+        }
+      ]
     },
     {
       "metricId": "tokens.cache_write",
-      "status": "supported-unavailable",
-      "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.644Z",
+      "history": [
+        {
+          "status": "supported-unavailable",
+          "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.595Z"
+        }
+      ]
     },
     {
       "metricId": "tokens.cache_write_5m",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.646Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.596Z"
+        }
+      ]
     },
     {
       "metricId": "tokens.cache_write_1h",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.648Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.597Z"
+        }
+      ]
     },
     {
       "metricId": "tokens.reasoning",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.649Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript; a lower bound: the transcript records the streaming-start count, not the provider's final count",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.598Z"
+        }
+      ]
     },
     {
       "metricId": "tokens.tool",
@@ -253,69 +456,225 @@
     },
     {
       "metricId": "context.repeated_file_reads",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "derived",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.658Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "derived",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.613Z"
+        }
+      ]
     },
     {
       "metricId": "context.governance_reads",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "derived",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.663Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "derived",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.615Z"
+        }
+      ]
     },
     {
       "metricId": "context.compactions",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.658Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.612Z"
+        }
+      ]
     },
     {
       "metricId": "context.repeated_file_reads_distinct",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "derived",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.659Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "derived",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.614Z"
+        }
+      ]
     },
     {
       "metricId": "context.peak_tokens",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.662Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.614Z"
+        }
+      ]
     },
     {
       "metricId": "context.window_tokens",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "unsupported",
+      "reason": "a Claude Code session transcript does not expose this metric",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.620Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "session.tokens.cumulative",
@@ -463,79 +822,215 @@
     {
       "metricId": "cost.session_cumulative",
       "status": "supported-unavailable",
-      "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "reason": "adapter recognizes the metric but the transcript did not carry it",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.619Z",
+      "history": [
+        {
+          "status": "supported-unavailable",
+          "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "time.wall_ms",
       "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "calculated",
+        "name": "ros",
+        "mechanism": "timestamp-difference"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "time.active_ms",
-      "status": "supported-unavailable",
-      "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "derived",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.666Z",
+      "history": [
+        {
+          "status": "supported-unavailable",
+          "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "derived",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.618Z"
+        }
+      ]
     },
     {
       "metricId": "time.agent_wall_ms",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "derived",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.667Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "derived",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.618Z"
+        }
+      ]
     },
     {
       "metricId": "host.compile_ms",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "unsupported",
+      "reason": "a Claude Code session transcript does not expose this metric",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.621Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "host.verify_ms",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "unsupported",
+      "reason": "a Claude Code session transcript does not expose this metric",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.622Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "host.prepare_apply_ms",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "unsupported",
+      "reason": "a Claude Code session transcript does not expose this metric",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.623Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "time.tool_ms",
@@ -573,13 +1068,29 @@
     {
       "metricId": "time.blocked_ms",
       "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "calculated",
+        "name": "ros-work-lifecycle",
+        "mechanism": "block-resume-intervals"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "time.human_interruption_ms",
@@ -605,25 +1116,81 @@
     },
     {
       "metricId": "time.first_code_change_ms",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "derived",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.664Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "derived",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.616Z"
+        }
+      ]
     },
     {
       "metricId": "time.first_productive_change_ms",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "derived",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.665Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "derived",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.617Z"
+        }
+      ]
     },
     {
       "metricId": "time.first_token_ms",
@@ -660,47 +1227,111 @@
     },
     {
       "metricId": "agent.retries",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "the transcript records API errors and retries only when they occur; none were recorded, which does not prove zero",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.600Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "acceptance.first_pass",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "unsupported",
+      "reason": "a Claude Code session transcript does not expose this metric",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.623Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "acceptance.repaired",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "unsupported",
+      "reason": "a Claude Code session transcript does not expose this metric",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.624Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "acceptance.repair_cycles",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "unsupported",
+      "reason": "a Claude Code session transcript does not expose this metric",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.625Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "agent.self_corrections",
@@ -858,47 +1489,147 @@
     },
     {
       "metricId": "model.requests",
-      "status": "supported-unavailable",
-      "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.638Z",
+      "history": [
+        {
+          "status": "supported-unavailable",
+          "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.581Z"
+        }
+      ]
     },
     {
       "metricId": "model.request_failures",
       "status": "supported-unavailable",
-      "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "reason": "the transcript records API errors and retries only when they occur; none were recorded, which does not prove zero",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.598Z",
+      "history": [
+        {
+          "status": "supported-unavailable",
+          "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "tool.calls",
-      "status": "supported-unavailable",
-      "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.650Z",
+      "history": [
+        {
+          "status": "supported-unavailable",
+          "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.601Z"
+        }
+      ]
     },
     {
       "metricId": "tool.failures",
-      "status": "supported-unavailable",
-      "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.651Z",
+      "history": [
+        {
+          "status": "supported-unavailable",
+          "reason": "runtime family can expose this metric, but no observation has been ingested for this execution",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.602Z"
+        }
+      ]
     },
     {
       "metricId": "tool.retries",
@@ -935,47 +1666,159 @@
     },
     {
       "metricId": "tool.shell_commands",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-observed",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.652Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "supported-observed",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.603Z"
+        }
+      ]
     },
     {
       "metricId": "tool.file_reads",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "derived",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.653Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "derived",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.608Z"
+        }
+      ]
     },
     {
       "metricId": "tool.file_writes",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "derived",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.654Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "derived",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.609Z"
+        }
+      ]
     },
     {
       "metricId": "tool.searches",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "derived",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.655Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "derived",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.610Z"
+        }
+      ]
     },
     {
       "metricId": "tool.web_activity",
@@ -1012,25 +1855,81 @@
     },
     {
       "metricId": "tool.build_executions",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "derived",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.656Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "derived",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.610Z"
+        }
+      ]
     },
     {
       "metricId": "tool.test_executions",
-      "status": "unknown",
-      "reason": "runtime capability not reported or mapped",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "derived",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.657Z",
+      "history": [
+        {
+          "status": "unknown",
+          "reason": "runtime capability not reported or mapped",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        },
+        {
+          "status": "derived",
+          "reason": "derived from the session transcript",
+          "source": {
+            "type": "runtime-output",
+            "name": "claude-code-transcript",
+            "mechanism": "session-transcript-jsonl"
+          },
+          "discoveredAt": "2026-11-01T18:52:37.269Z",
+          "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+          "recordedAt": "2026-11-01T18:52:37.611Z"
+        }
+      ]
     },
     {
       "metricId": "tool.deployments",
@@ -1095,134 +1994,326 @@
     {
       "metricId": "git.ending_dirty_files",
       "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-status",
+        "mechanism": "porcelain-v1"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "git.commits_created",
-      "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "execution attribution unavailable: preexisting-dirty-worktree",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-diff",
+        "mechanism": "precondition-check"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "git.files_added",
-      "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "execution attribution unavailable: preexisting-dirty-worktree",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-diff",
+        "mechanism": "precondition-check"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "git.files_modified",
-      "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "execution attribution unavailable: preexisting-dirty-worktree",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-diff",
+        "mechanism": "precondition-check"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "git.files_deleted",
-      "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "execution attribution unavailable: preexisting-dirty-worktree",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-diff",
+        "mechanism": "precondition-check"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "git.files_renamed",
-      "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "execution attribution unavailable: preexisting-dirty-worktree",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-diff",
+        "mechanism": "precondition-check"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "git.binary_files_changed",
-      "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "execution attribution unavailable: preexisting-dirty-worktree",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-diff",
+        "mechanism": "precondition-check"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "git.lines_added",
-      "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "execution attribution unavailable: preexisting-dirty-worktree",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-diff",
+        "mechanism": "precondition-check"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "git.lines_deleted",
-      "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "execution attribution unavailable: preexisting-dirty-worktree",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-diff",
+        "mechanism": "precondition-check"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "tests.added",
-      "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "execution attribution unavailable: preexisting-dirty-worktree",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-diff",
+        "mechanism": "precondition-check"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "tests.modified",
-      "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "execution attribution unavailable: preexisting-dirty-worktree",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-diff",
+        "mechanism": "precondition-check"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "tests.removed",
-      "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "execution attribution unavailable: preexisting-dirty-worktree",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-diff",
+        "mechanism": "precondition-check"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "tests.count_before",
@@ -1490,14 +2581,30 @@
     },
     {
       "metricId": "documentation.files_changed",
-      "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "status": "supported-unavailable",
+      "reason": "execution attribution unavailable: preexisting-dirty-worktree",
+      "discoveredAt": "2026-11-01T18:52:45.601Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "ros-git",
+        "name": "git-diff",
+        "mechanism": "precondition-check"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:45.601Z",
+      "recordedAt": "2026-11-01T18:52:45.601Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "quality.false_leads",
@@ -1557,13 +2664,29 @@
     {
       "metricId": "telemetry.unknown_fields",
       "status": "derived",
-      "reason": "Praxis can derive this metric when its preconditions hold",
-      "discoveredAt": "2026-11-01T18:50:58.595Z",
+      "reason": "normalized measurement recorded",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
       "source": {
-        "type": "environment",
-        "name": "runtime-identity",
-        "mechanism": "explicit-or-unmapped-environment"
-      }
+        "type": "calculated",
+        "name": "ros-field-discovery",
+        "mechanism": "unmapped-leaf-count"
+      },
+      "lastAssessedAt": "2026-11-01T18:52:37.269Z",
+      "recordedAt": "2026-11-01T18:52:37.690Z",
+      "history": [
+        {
+          "status": "derived",
+          "reason": "Praxis can derive this metric when its preconditions hold",
+          "source": {
+            "type": "environment",
+            "name": "runtime-identity",
+            "mechanism": "explicit-or-unmapped-environment"
+          },
+          "discoveredAt": "2026-11-01T18:50:58.595Z",
+          "lastAssessedAt": "2026-11-01T18:50:58.595Z",
+          "recordedAt": "2026-11-01T18:50:58.595Z"
+        }
+      ]
     },
     {
       "metricId": "telemetry.raw_snapshots_omitted",
@@ -1597,6 +2720,127 @@
         "name": "runtime-identity",
         "mechanism": "explicit-or-unmapped-environment"
       }
+    },
+    {
+      "providerField": "$.usage.extensions.iterations[].cache_creation.ephemeral_1h_input_tokens",
+      "status": "unknown",
+      "reason": "provider field preserved but not normalized by this adapter version",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      }
+    },
+    {
+      "providerField": "$.usage.extensions.iterations[].cache_creation.ephemeral_5m_input_tokens",
+      "status": "unknown",
+      "reason": "provider field preserved but not normalized by this adapter version",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      }
+    },
+    {
+      "providerField": "$.usage.extensions.iterations[].cache_creation_input_tokens",
+      "status": "unknown",
+      "reason": "provider field preserved but not normalized by this adapter version",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      }
+    },
+    {
+      "providerField": "$.usage.extensions.iterations[].cache_read_input_tokens",
+      "status": "unknown",
+      "reason": "provider field preserved but not normalized by this adapter version",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      }
+    },
+    {
+      "providerField": "$.usage.extensions.iterations[].input_tokens",
+      "status": "unknown",
+      "reason": "provider field preserved but not normalized by this adapter version",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      }
+    },
+    {
+      "providerField": "$.usage.extensions.iterations[].output_tokens",
+      "status": "unknown",
+      "reason": "provider field preserved but not normalized by this adapter version",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      }
+    },
+    {
+      "providerField": "$.usage.extensions.server_tool_use.web_fetch_requests",
+      "status": "unknown",
+      "reason": "provider field preserved but not normalized by this adapter version",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      }
+    },
+    {
+      "providerField": "$.usage.extensions.server_tool_use.web_search_requests",
+      "status": "unknown",
+      "reason": "provider field preserved but not normalized by this adapter version",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      }
+    },
+    {
+      "providerField": "$.usage.labels.inference_geo[]",
+      "status": "unknown",
+      "reason": "provider field preserved but not normalized by this adapter version",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      }
+    },
+    {
+      "providerField": "$.usage.labels.service_tier[]",
+      "status": "unknown",
+      "reason": "provider field preserved but not normalized by this adapter version",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      }
+    },
+    {
+      "providerField": "$.usage.labels.speed[]",
+      "status": "unknown",
+      "reason": "provider field preserved but not normalized by this adapter version",
+      "discoveredAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl"
+      }
     }
   ],
   "metrics": [
@@ -1619,9 +2863,1575 @@
       },
       "collectedAt": "2026-11-01T18:50:58.595Z",
       "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-20a78999d1a6974f6171f736",
+      "id": "model.requests",
+      "value": 54,
+      "unit": "count",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-bbc6e096070c380b1a0eb294",
+      "id": "tokens.input",
+      "value": 108,
+      "unit": "tokens",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-ac526d297d2525c40c8bb0f2",
+      "id": "tokens.output",
+      "value": 37424,
+      "unit": "tokens",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "bound": "lower",
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-7c2bdf483dc8c3f21ba24a8b",
+      "id": "tokens.cache_read",
+      "value": 5612244,
+      "unit": "tokens",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-f9bebfea91f28df43682f875",
+      "id": "tokens.cache_write",
+      "value": 110280,
+      "unit": "tokens",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-43b9498d52f0e7f33d73d626",
+      "id": "tokens.cache_write_5m",
+      "value": 110280,
+      "unit": "tokens",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-694e3386de65b0b11b5a03a1",
+      "id": "tokens.cache_write_1h",
+      "value": 0,
+      "unit": "tokens",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-ea1a67d57ecbef0dc305bcbe",
+      "id": "tokens.reasoning",
+      "value": 9784,
+      "unit": "tokens",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "bound": "lower",
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-b77930f4233aa3abd3d9e428",
+      "id": "tool.calls",
+      "value": 57,
+      "unit": "count",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-f2c4564bd271a1dd3094032e",
+      "id": "tool.failures",
+      "value": 2,
+      "unit": "count",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-0899ae6e5b028b9b80514801",
+      "id": "tool.shell_commands",
+      "value": 50,
+      "unit": "count",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-afe2d140d07fdf7d0496b4fb",
+      "id": "tool.file_reads",
+      "value": 35,
+      "unit": "count",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-27ce1e11e4e2b591f509f82a",
+      "id": "tool.file_writes",
+      "value": 12,
+      "unit": "count",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-3220e54840dc78ca18686b0e",
+      "id": "tool.searches",
+      "value": 21,
+      "unit": "count",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-043c6364379a32ae7e26f222",
+      "id": "tool.build_executions",
+      "value": 6,
+      "unit": "count",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-314461d93dc35cc6aed6394a",
+      "id": "tool.test_executions",
+      "value": 6,
+      "unit": "count",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-453eb2718c901314289a2e14",
+      "id": "context.compactions",
+      "value": 0,
+      "unit": "count",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-c88414ca1dc048d73dc88b37",
+      "id": "context.repeated_file_reads",
+      "value": 4,
+      "unit": "count",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-384e48eb8bea924c73492b7f",
+      "id": "context.repeated_file_reads_distinct",
+      "value": 4,
+      "unit": "count",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-944a9b7d5513f64f5d119cba",
+      "id": "context.peak_tokens",
+      "value": 148645,
+      "unit": "tokens",
+      "currency": null,
+      "quality": "observed",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "maximum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-f049924444dffd0932bf43d0",
+      "id": "context.governance_reads",
+      "value": 1,
+      "unit": "count",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-3b4b9abf6ac84cadc9e6dca8",
+      "id": "time.first_code_change_ms",
+      "value": 229163,
+      "unit": "milliseconds",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "none",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-96b58bc067ab937dfa35fe94",
+      "id": "time.first_productive_change_ms",
+      "value": 193087,
+      "unit": "milliseconds",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "none",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-ed726cdd8bdca9a9f9dc83a2",
+      "id": "time.active_ms",
+      "value": 878830,
+      "unit": "milliseconds",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-448cf1c84ad50ea9ae133025",
+      "id": "time.agent_wall_ms",
+      "value": 878830,
+      "unit": "milliseconds",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "session",
+      "aggregation": "sum",
+      "dimensions": {
+        "snapshot": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40"
+      },
+      "pricing": null,
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-4d85512614e6d263e77a6f3e",
+      "id": "telemetry.unknown_fields",
+      "value": 11,
+      "unit": "count",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "execution",
+      "aggregation": "sum",
+      "dimensions": {},
+      "pricing": null,
+      "source": {
+        "type": "calculated",
+        "name": "ros-field-discovery",
+        "mechanism": "unmapped-leaf-count"
+      },
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-92a17b12a72a491c49864835",
+      "id": "time.wall_ms",
+      "value": 107006,
+      "unit": "milliseconds",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "execution",
+      "aggregation": "sum",
+      "dimensions": {},
+      "pricing": null,
+      "source": {
+        "type": "calculated",
+        "name": "ros",
+        "mechanism": "timestamp-difference"
+      },
+      "collectedAt": "2026-11-01T18:52:45.601Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-d6a51be462d655f64a80edc2",
+      "id": "time.blocked_ms",
+      "value": 0,
+      "unit": "milliseconds",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "execution",
+      "aggregation": "sum",
+      "dimensions": {},
+      "pricing": null,
+      "source": {
+        "type": "calculated",
+        "name": "ros-work-lifecycle",
+        "mechanism": "block-resume-intervals"
+      },
+      "collectedAt": "2026-11-01T18:52:45.601Z",
+      "schemaVersion": "1.0.0"
+    },
+    {
+      "measurementId": "MEAS-53e61784c982810f3e15b562",
+      "id": "git.ending_dirty_files",
+      "value": 0,
+      "unit": "count",
+      "currency": null,
+      "quality": "derived",
+      "confidence": null,
+      "scope": "execution",
+      "aggregation": "maximum",
+      "dimensions": {},
+      "pricing": null,
+      "source": {
+        "type": "ros-git",
+        "name": "git-status",
+        "mechanism": "porcelain-v1"
+      },
+      "collectedAt": "2026-11-01T18:52:45.601Z",
+      "schemaVersion": "1.0.0"
     }
   ],
-  "rawTelemetry": [],
+  "rawTelemetry": [
+    {
+      "snapshotId": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40",
+      "adapter": "generic",
+      "schemaVersion": null,
+      "collectedAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "payload": {
+        "schema": "praxis.claude-session-summary/2",
+        "sessionId": "b8f653b4-4ecb-54ef-821b-bb1e340e0d38",
+        "runtimeVersion": "2.1.316",
+        "models": [
+          "claude-opus-5-5"
+        ],
+        "agentIds": [
+          "a1818dc943d04ed40"
+        ],
+        "sidechain": true,
+        "startedAt": "2026-11-01T18:37:52.344Z",
+        "endedAt": "2026-11-01T18:52:31.174Z",
+        "spanMs": 878830,
+        "activeMs": 878830,
+        "idleGapMs": 900000,
+        "idleGapsExcluded": 0,
+        "msToFirstCodeChange": 229163,
+        "msToFirstProductiveChange": 193087,
+        "peakContextTokens": 148645,
+        "distinctFilesRead": 31,
+        "malformedLines": 0,
+        "apiErrors": 0,
+        "retries": 0,
+        "repeatedReads": [
+          {
+            "path": ".github/workflows/build-and-test.yml",
+            "count": 2
+          },
+          {
+            "path": ".github/workflows/candidate-acceptance.yml",
+            "count": 2
+          },
+          {
+            "path": "src/Causa.App/Views/Shell.fs",
+            "count": 2
+          },
+          {
+            "path": "tests/Causa.Contract.Tests/App/ConsumerIntegration.fs",
+            "count": 2
+          }
+        ],
+        "governanceReads": [
+          {
+            "path": "AGENTS.md",
+            "count": 1
+          }
+        ],
+        "toolCalls": [
+          {
+            "name": "Bash",
+            "count": 50
+          },
+          {
+            "name": "Read",
+            "count": 3
+          },
+          {
+            "name": "Write",
+            "count": 4
+          }
+        ],
+        "usage": {
+          "extensions": {
+            "iterations[].cache_creation.ephemeral_1h_input_tokens": 0,
+            "iterations[].cache_creation.ephemeral_5m_input_tokens": 110280,
+            "iterations[].cache_creation_input_tokens": 110280,
+            "iterations[].cache_read_input_tokens": 5612244,
+            "iterations[].input_tokens": 108,
+            "iterations[].output_tokens": 37424,
+            "server_tool_use.web_fetch_requests": 0,
+            "server_tool_use.web_search_requests": 0
+          },
+          "labels": {
+            "inference_geo": [
+              "global"
+            ],
+            "service_tier": [
+              "standard"
+            ],
+            "speed": [
+              "standard"
+            ]
+          }
+        },
+        "requestLedger": {
+          "columns": [
+            "input",
+            "output",
+            "cacheRead",
+            "cacheWrite",
+            "cacheWrite5m",
+            "cacheWrite1h",
+            "reasoning"
+          ],
+          "rows": [
+            {
+              "key": "msg_011CgchCjPN4KSKtN8VF9VKe",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                191,
+                38363,
+                10406,
+                10406,
+                0,
+                16
+              ]
+            },
+            {
+              "key": "msg_011CgchD81QYaHzuuA9xmMCH",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                224,
+                48769,
+                5221,
+                5221,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchDTF3fp54mgh3wt4my",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                201,
+                53990,
+                765,
+                765,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchDgggE5pDGrKcodvxZ",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                251,
+                54755,
+                2836,
+                2836,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchE19Rwe3esYwPtmytC",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                259,
+                57591,
+                951,
+                951,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchEKQXE4DXzsixy8a8K",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                277,
+                58542,
+                1140,
+                1140,
+                0,
+                61
+              ]
+            },
+            {
+              "key": "msg_011CgchEd5QdPF9nZr6GsJwq",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                267,
+                59682,
+                2479,
+                2479,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchF11XRwS8yoNsp37S4",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                164,
+                62161,
+                6379,
+                6379,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchFGpmq1cGxtTWatDSc",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                199,
+                68540,
+                2169,
+                2169,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchFXPsmafwwDR8MV2ft",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                305,
+                70709,
+                4324,
+                4324,
+                0,
+                107
+              ]
+            },
+            {
+              "key": "msg_011CgchFwbfp6BpfZfFbPWFL",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                190,
+                75033,
+                1661,
+                1661,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchGBnSPcj16UHgZeGsn",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                170,
+                76694,
+                575,
+                575,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchGToMUeQBhNnwkwnxU",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                239,
+                77269,
+                5088,
+                5088,
+                0,
+                44
+              ]
+            },
+            {
+              "key": "msg_011CgchGkooxfBVZuawWsCjU",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                173,
+                82357,
+                573,
+                573,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchH3eLCznoUKkueSMEH",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                161,
+                82930,
+                302,
+                302,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchHGLpMP3aFeC3WVmeR",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                1349,
+                83232,
+                2196,
+                2196,
+                0,
+                1122
+              ]
+            },
+            {
+              "key": "msg_011CgchJQxmCDj2fnYYPJkGC",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                320,
+                85428,
+                1681,
+                1681,
+                0,
+                105
+              ]
+            },
+            {
+              "key": "msg_011CgchJknNvBUyeVowph8fP",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                212,
+                87109,
+                382,
+                382,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchK3yj8VKe9uQDvZShQ",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                360,
+                87491,
+                2167,
+                2167,
+                0,
+                76
+              ]
+            },
+            {
+              "key": "msg_011CgchKQ2yzgsLERmFcbgpa",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                254,
+                89658,
+                459,
+                459,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchKgn3xg7ZRpTxyEcfH",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                244,
+                90117,
+                2191,
+                2191,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchL2e8iuPNzUbkkAHWw",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                500,
+                92308,
+                938,
+                938,
+                0,
+                251
+              ]
+            },
+            {
+              "key": "msg_011CgchLerEdFFNAyrhcrZJ3",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                340,
+                93246,
+                1950,
+                1950,
+                0,
+                59
+              ]
+            },
+            {
+              "key": "msg_011CgchM3AfM7bB4BREW8r8R",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                1734,
+                95196,
+                2196,
+                2196,
+                0,
+                1450
+              ]
+            },
+            {
+              "key": "msg_011CgchNR64xGLjYwBrpHNV7",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                3286,
+                97392,
+                3001,
+                3001,
+                0,
+                3109
+              ]
+            },
+            {
+              "key": "msg_011CgchQhmE3hFoXFUFT2nSP",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                339,
+                100393,
+                4846,
+                4846,
+                0,
+                120
+              ]
+            },
+            {
+              "key": "msg_011CgchR7jNe26JLd3TRNCq3",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                3274,
+                105239,
+                2947,
+                2947,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchT1oUm4f5QgaA4YBWF",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                182,
+                108186,
+                3317,
+                3317,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchTDzTK4i8cV2wFADTo",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                3315,
+                111503,
+                447,
+                447,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchUtn7L7jUj67ug9ncY",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                969,
+                111950,
+                3370,
+                3370,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchWZ6VqMBoH5dg2ovY8",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                1612,
+                115320,
+                985,
+                985,
+                0,
+                183
+              ]
+            },
+            {
+              "key": "msg_011CgchXXig1t9QTsTUNcvSy",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                564,
+                116305,
+                1996,
+                1996,
+                0,
+                39
+              ]
+            },
+            {
+              "key": "msg_011CgchY2FQHUBxGnemCFXRQ",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                805,
+                118301,
+                1028,
+                1028,
+                0,
+                643
+              ]
+            },
+            {
+              "key": "msg_011CgchYhQ7DXQbdLRy7i4AC",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                142,
+                119329,
+                924,
+                924,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchYw6dMeQQCdTL7BAFg",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                1116,
+                120253,
+                2994,
+                2994,
+                0,
+                935
+              ]
+            },
+            {
+              "key": "msg_011CgchZw2BgGvHKwd16tRYc",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                2769,
+                123247,
+                2748,
+                2748,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchbZMWAL7cA63PDeYdd",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                252,
+                125995,
+                2830,
+                2830,
+                0,
+                71
+              ]
+            },
+            {
+              "key": "msg_011Cgchc3B5m1URpYq9a8aj5",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                1828,
+                128825,
+                446,
+                446,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011Cgchejuqb1JR51kSkmRHM",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                87,
+                129271,
+                2091,
+                2091,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchetDANPQk66212UgYg",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                1943,
+                131362,
+                152,
+                152,
+                0,
+                174
+              ]
+            },
+            {
+              "key": "msg_011CgchgZiDqMz8RbNuS9eQp",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                474,
+                131514,
+                2257,
+                2257,
+                0,
+                79
+              ]
+            },
+            {
+              "key": "msg_011Cgchi4UdsFBi3t2a1DnrJ",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                259,
+                133771,
+                667,
+                667,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgchrAorFb6Ti2CJ5hEVD",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                376,
+                134438,
+                3016,
+                3016,
+                0,
+                164
+              ]
+            },
+            {
+              "key": "msg_011Cgci9dUCjTRBZRjTcFYwL",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                152,
+                137454,
+                2471,
+                2471,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgciAbaNrLRS5mEqUxLda",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                1127,
+                139925,
+                1290,
+                1290,
+                0,
+                63
+              ]
+            },
+            {
+              "key": "msg_011CgciBKU2oqZ8n832fHrLr",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                121,
+                141215,
+                1220,
+                1220,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgciBaKk3Q6BUb9cKsNkP",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                204,
+                142435,
+                822,
+                822,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgciC2apGuxHGuuyARJiS",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                551,
+                143257,
+                400,
+                400,
+                0,
+                126
+              ]
+            },
+            {
+              "key": "msg_011CgciChHyHugfXQVLyYar9",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                474,
+                143657,
+                694,
+                694,
+                0,
+                43
+              ]
+            },
+            {
+              "key": "msg_011CgciDJKPYcZNBL54Pmw3m",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                649,
+                144351,
+                832,
+                832,
+                0,
+                497
+              ]
+            },
+            {
+              "key": "msg_011CgciDu7eUSn6C1quvKvzS",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                498,
+                145183,
+                1134,
+                1134,
+                0,
+                91
+              ]
+            },
+            {
+              "key": "msg_011CgciGBcPVY9FGcjBwYUnb",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                350,
+                146317,
+                669,
+                669,
+                0,
+                0
+              ]
+            },
+            {
+              "key": "msg_011CgciHLhcgtHN5Xb1YczGo",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                446,
+                146986,
+                714,
+                714,
+                0,
+                116
+              ]
+            },
+            {
+              "key": "msg_011CgciJz9u9eLTuGAgd9RsC",
+              "model": "claude-opus-5-5",
+              "agentId": "a1818dc943d04ed40",
+              "usage": [
+                2,
+                676,
+                147700,
+                943,
+                943,
+                0,
+                40
+              ]
+            }
+          ]
+        }
+      },
+      "payloadBytes": 8637,
+      "discoveredFields": [
+        "$.usage.extensions.iterations[].cache_creation.ephemeral_1h_input_tokens",
+        "$.usage.extensions.iterations[].cache_creation.ephemeral_5m_input_tokens",
+        "$.usage.extensions.iterations[].cache_creation_input_tokens",
+        "$.usage.extensions.iterations[].cache_read_input_tokens",
+        "$.usage.extensions.iterations[].input_tokens",
+        "$.usage.extensions.iterations[].output_tokens",
+        "$.usage.extensions.server_tool_use.web_fetch_requests",
+        "$.usage.extensions.server_tool_use.web_search_requests",
+        "$.usage.labels.inference_geo[]",
+        "$.usage.labels.service_tier[]",
+        "$.usage.labels.speed[]"
+      ],
+      "redactions": []
+    }
+  ],
   "events": [
     {
       "type": "execution.started",
@@ -1631,6 +4441,35 @@
         "name": "ros",
         "mechanism": "work-lifecycle"
       }
+    },
+    {
+      "type": "telemetry.snapshot.ingested",
+      "snapshotId": "claude-session-b8f653b4-4ecb-54ef-821b-bb1e340e0d38-agent-a1818dc943d04ed40",
+      "adapter": "generic",
+      "rawRetention": {
+        "status": "retained",
+        "reason": null,
+        "payloadBytes": 8637
+      },
+      "occurredAt": "2026-11-01T18:52:37.269Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "claude-code-transcript",
+        "mechanism": "session-transcript-jsonl",
+        "provider": "anthropic",
+        "runtime": "claude-code"
+      },
+      "eventId": "TEVT-f9e98fcef865831cf5863254"
+    },
+    {
+      "type": "execution.finalized",
+      "occurredAt": "2026-11-01T18:52:45.601Z",
+      "source": {
+        "type": "ros-clock",
+        "name": "ros",
+        "mechanism": "work-lifecycle"
+      },
+      "eventId": "TEVT-0af561e122e48def51657fac"
     }
   ],
   "repository": {
@@ -1652,8 +4491,18 @@
         "web/index.html"
       ]
     },
-    "end": null,
-    "changeSummary": null
+    "end": {
+      "available": true,
+      "repository": "indy-init-rehearsal-008",
+      "branch": "r8/t17",
+      "commit": "352a6925927fbed88d7ea7485d52b5d5c9edaf18",
+      "dirty": false,
+      "dirtyPaths": []
+    },
+    "changeSummary": {
+      "available": false,
+      "reason": "preexisting-dirty-worktree"
+    }
   },
   "scope": {
     "initial": {},
