@@ -103,3 +103,80 @@ test("UI-023-O1", async ({ page, causa }) => {
   await expect(workspace(page).locator("[data-causa-lifecycle]")).not.toHaveText(/verif/i);
   for (const lozenge of await page.locator(".ef-status-lozenge").allInnerTexts()) expect(lozenge).not.toMatch(/verif/i);
 });
+
+// WI-R8-FINALUI (ui): O2-O4. The same saved-but-unresolved investigation, seen from both sides: Administration holds
+// the technical checks (provider connection, history replay), the investigation views hold only domain facts.
+
+/** The Administration screen's fact row for `key` (provider, replay, ...). */
+const adminFact = (page, key) => page.locator(`[aria-labelledby="causa-admin-heading"] [data-causa-admin-status] tr[data-fact="${key}"]`);
+
+/** Badge texts shown on investigation-facing screens: every status lozenge outside Administration. */
+const investigationBadges = (page) =>
+  page.evaluate(() =>
+    [...document.querySelectorAll(".ef-status-lozenge")]
+      .filter((el) => !el.closest('[aria-labelledby="causa-admin-heading"]') && el.offsetParent !== null)
+      .map((el) => (el.innerText ?? el.textContent).trim())
+      .filter((t) => t !== ""));
+
+const openAdministration = async (page) => {
+  await page.getByRole("navigation", { name: "Primary" }).first().getByRole("link", { name: "Administration", exact: true }).click();
+  await expect(page.locator('[aria-labelledby="causa-admin-heading"]')).toBeVisible();
+};
+
+const technicalWords = /events checked|history check|Investigation history|Dataset validation|replay|schema|integrity|Provider connection/i;
+
+test("UI-023-O2", async ({ page, causa }) => {
+  await savedWithUnresolvedFindings(page, causa);
+  // Investigation-facing: badges are only the domain lifecycle and the save state; no data-integrity or runtime text.
+  const lifecycle = (await workspace(page).locator("[data-causa-lifecycle]").innerText()).trim();
+  expect(lifecycle).toMatch(/\S/);
+  const badges = await investigationBadges(page);
+  for (const badge of badges) expect(badge, `badge "${badge}"`).not.toMatch(technicalWords);
+  expect(await investigationText(page)).not.toMatch(technicalWords);
+  // Administration: the technical integrity facts live here.
+  await openAdministration(page);
+  await expect(adminFact(page, "replay")).toHaveAttribute("data-state", "verified");
+  await expect(adminFact(page, "replay")).toContainText("Investigation history check");
+  await expect(adminFact(page, "replay")).toContainText(/events checked in order/);
+  await expect(adminFact(page, "provider")).toHaveAttribute("data-state", "verified");
+});
+
+test("UI-023-O3", async ({ page, causa }) => {
+  await savedWithUnresolvedFindings(page, causa);
+  // Investigation fields: lifecycle (domain) and save state (persistence), each in its own projection field.
+  const lifecycle = (await workspace(page).locator("[data-causa-lifecycle]").innerText()).trim();
+  const saveState = (await stateLabel(page).innerText()).trim();
+  expect(saveState).toBe("Saved");
+  await openAdministration(page);
+  // Technical validation: its own field (data-state on Administration facts) with its own vocabulary.
+  const technicalStates = await page.locator('[aria-labelledby="causa-admin-heading"] tr[data-fact]').evaluateAll((rows) => rows.map((r) => r.getAttribute("data-state")));
+  expect(technicalStates.length).toBeGreaterThan(0);
+  for (const s of technicalStates) expect(["verified", "unknown", "unavailable", "failed"]).toContain(s);
+  expect(technicalStates).toContain("verified");
+  // Disjoint labels: no investigation-facing label is a technical-validation label, and vice versa.
+  const technicalLabels = new Set(["verified", "unknown", "unavailable", "not available", "failed"]);
+  for (const label of [lifecycle, saveState]) expect(technicalLabels.has(label.toLowerCase()), label).toBe(false);
+  // Disjoint fields: the technical state is not carried on investigation elements, nor the lifecycle on facts.
+  expect(await page.locator("[data-causa-workspace] [data-fact], [data-causa-workspace] tr[data-state]").count()).toBe(0);
+  expect(await page.locator('[aria-labelledby="causa-admin-heading"] [data-causa-lifecycle]').count()).toBe(0);
+});
+
+test("UI-023-O4", async ({ page, causa }) => {
+  // Regression for the conflation case: the investigation loads correctly (provider connected, history replays,
+  // saved and read back from GitHub) while its findings are unresolved. Technical success is reported as such in
+  // Administration and nowhere turns into a verified finding in the investigation views.
+  await savedWithUnresolvedFindings(page, causa);
+  await expect(workspace(page).locator('[data-causa-region="report"]')).toContainText("No conclusion is verified");
+  const before = await investigationText(page);
+  expect(before).not.toMatch(/\bVerified\b/);
+  for (const badge of await investigationBadges(page)) expect(badge).not.toMatch(/verif|valid/i);
+  await openAdministration(page);
+  await expect(adminFact(page, "replay")).toHaveAttribute("data-state", "verified");
+  await expect(page.locator("[data-causa-admin-summary]")).toContainText(/Verified [1-9]/);
+  // Back in the investigation, the technical success has not leaked into the findings.
+  await page.goBack();
+  await expect(workspace(page)).toBeVisible();
+  await expect(workspace(page).locator("[data-causa-lifecycle]")).not.toHaveText(/Resolved|verif/i);
+  await expect(workspace(page).locator('[data-causa-region="report"]')).toContainText("No conclusion is verified");
+  expect(await investigationText(page)).not.toMatch(/\bVerified\b/);
+});
