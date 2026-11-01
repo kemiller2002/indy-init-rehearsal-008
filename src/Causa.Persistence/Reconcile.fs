@@ -87,6 +87,36 @@ module Answers =
             | _ -> None
         | None -> None
 
+    /// A contents read of a file over the contents API's 1 MB limit (GH-LARGE-FILE): `encoding: none` with the file's
+    /// path and its blob sha, the name of the one re-read through the Git blobs API.
+    let largeFile (body: string) : (string * string) option =
+        match tryParse body with
+        | Some root ->
+            match prop "path" root |> Option.bind str, prop "encoding" root |> Option.bind str, prop "sha" root |> Option.bind str with
+            | Some p, Some "none", Some sha -> Some(p, sha)
+            | _ -> None
+        | None -> None
+
+    /// A Git blobs API read (GET /git/blobs/<sha>): its sha and its bytes. A blob answer names no path, which is what
+    /// tells it apart from a contents answer.
+    let blob (body: string) : (string * byte[]) option =
+        match tryParse body with
+        | Some root ->
+            match prop "path" root, prop "sha" root |> Option.bind str, prop "encoding" root |> Option.bind str, prop "content" root |> Option.bind str with
+            | None, Some sha, Some "base64", Some content ->
+                try
+                    Some(sha, Convert.FromBase64String(content.Replace("\n", "").Replace("\r", "")))
+                with :? FormatException ->
+                    None
+            | _ -> None
+        | None -> None
+
+    /// The Git object id of a blob holding `bytes`: SHA-1 over "blob <length>\0" and the bytes. GitHub's contents and
+    /// blobs answers name a file by it.
+    let gitBlobSha (bytes: byte[]) : string =
+        let header = Encoding.ASCII.GetBytes(sprintf "blob %d\000" bytes.Length)
+        Convert.ToHexString(Security.Cryptography.SHA1.HashData(Array.append header bytes)).ToLowerInvariant()
+
     let compare (body: string) : CompareView option =
         match tryParse body with
         | Some root ->

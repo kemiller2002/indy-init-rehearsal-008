@@ -85,45 +85,103 @@ module PERSIST007Tests =
             Assert.True(sent |> List.skip (lastMutation + 1) |> List.exists (fun r -> r.Url.Contains("ref=" + oid)))
             Assert.Equal(session.BaseHead, (opened (openAtHead p investigation)).ReadAt))
 
-    /// GH-LARGE-FILE: a file over 1 MB comes back from the contents API as `encoding: none`; the provider re-reads its
-    /// blob exactly once and gets the bytes written. Live: a 1.5 MB file committed to the fresh branch.
+    /// Every request the machine emits is executed and its meaning stepped until nothing is outstanding; a scheduled
+    /// reconciliation read fires at once (ReconcileDue).
+    let private settle (p: ProviderUnderTest) (machine: SaveMachine) (session: InvestigationSession) (effects: SaveEffect list) =
+        let ok r =
+            match r with
+            | Ok x -> x
+            | Error f -> failwithf "%A: SM-SAVE fault %A" p.Mode f
+
+        let rec run (session: InvestigationSession) (effects: SaveEffect list) (budget: int) =
+            let send = effects |> List.tryPick (function Send r -> Some r | _ -> None)
+            let timer = effects |> List.exists (function ScheduleReconcileRead _ -> true | _ -> false)
+
+            match send, timer with
+            | _ when budget = 0 -> failwithf "%A: the save did not settle" p.Mode
+            | Some request, _ ->
+                match machine.Interpret (context p) session (p.Execute request) with
+                | MachineEvent input ->
+                    let next, more = ok (machine.Step (context p) session input)
+                    run next more (budget - 1)
+                | NextRequest(next, request) -> run next [ Send request ] (budget - 1)
+            | None, true ->
+                let next, more = ok (machine.ReconcileDue (context p) session)
+                run next more (budget - 1)
+            | None, false -> session
+
+        run session effects 64
+
+    /// Enough commands that events.ndjson is over the contents API's 1 MB limit.
+    let private largeCommandCount = 9000
+
+    /// One save through SM-SAVE whose events.ndjson is over 1 MB; `beforeSave` runs after create and open (for the
+    /// fake's scripted lost answer). Asserts Saved(Confirmed) at the branch head after exactly one blob read, named by
+    /// the written events file's blob sha, sent after the mutation.
+    let private saveLarge (p: ProviderUnderTest) (beforeSave: unit -> unit) =
+        let investigation, first = setUp p
+        let fileSetOf = GitHubProvider.fileSetOf StorageV1.codec first (decided first)
+        let machine = SaveProcess.create (GitHubProvider.saveSetup tab markers fileSetOf false)
+
+        let ok r =
+            match r with
+            | Ok x -> x
+            | Error f -> failwithf "%A: SM-SAVE fault %A" p.Mode f
+
+        let edited =
+            List.init largeCommandCount (fun _ -> command investigation)
+            |> List.fold (fun s c -> fst (ok (machine.Step (context p) s (SaveInput.Edit c)))) (machine.Initial first)
+
+        let written = fileSetOf edited
+        Assert.True(written.Events.Length > StatefulFake.contentsLimit, sprintf "events.ndjson is %d bytes" written.Events.Length)
+        beforeSave ()
+        let mutationsBefore = (mutations p).Length
+        let saving, effects = ok (machine.Step (context p) edited SaveInput.SaveRequested)
+        let settled = settle p machine saving effects
+
+        match settled.State with
+        | SaveState.Saved(Confirmed c) ->
+            Assert.Equal(head p, c.CommitOid)
+            Assert.Equal(c.CommitOid, settled.BaseHead)
+        | other -> failwithf "%A: expected Saved(Confirmed) after the large-file re-read, got %A" p.Mode other
+
+        let sent = p.Sent()
+        let afterMutation = sent |> List.skip (1 + (sent |> List.findIndexBack (fun r -> r.Body |> Option.exists (fun b -> b.Contains "createCommitOnBranch"))))
+        let blobs = afterMutation |> List.filter (fun r -> r.Url.Contains "/git/blobs/")
+        Assert.Single(blobs) |> ignore
+        Assert.EndsWith("/git/blobs/" + Answers.gitBlobSha written.Events, blobs.Head.Url)
+        Assert.Equal(mutationsBefore + 1, (mutations p).Length)
+        afterMutation
+
+    /// A fake provider whose server stays reachable, so a test can script a lost answer.
+    let private scriptableFake () =
+        let server = Conformance.newFake ()
+        let sent = Collections.Concurrent.ConcurrentQueue<HttpRequest>()
+
+        server,
+        { Mode = FakeProvider
+          Execute =
+            fun request ->
+                sent.Enqueue request
+                server.Execute request
+          Connection = Conformance.fakeConnection
+          Sent = fun () -> List.ofSeq sent }
+
+    /// GH-LARGE-FILE (PERSIST-007-O1): a file over 1 MB comes back from the contents API as `encoding: none`; the save
+    /// re-reads its blob exactly once and confirms only when the blob's bytes are the bytes written. Driven end to end
+    /// through SM-SAVE: read-back after the mutation, and reconciliation after a lost answer (PERSIST-015), against
+    /// the stateful fake; then the read-back against the live write-test repository (CI, CAUSA_WRITE_TOKEN).
     [<Fact>]
     let ``ReadBackOfFileOver1MB`` () =
-        let large = Encoding.UTF8.GetBytes(String('x', 1_500_000))
-        let id () = Conformance.freshId ()
+        // Fake, read-back: three contents reads at the commit and one blob read for events.ndjson.
+        let readBack = saveLarge (fake ()) ignore
+        Assert.Equal(3, readBack |> List.filter (fun r -> r.Url.Contains "/contents/") |> List.length)
 
-        // Fake: the contents API's large-file form, then the blob.
-        let tooLarge = Answered(id (), 200, [], """{"type":"file","path":"big.bin","encoding":"none","size":1500000,"content":"","sha":"abc123"}""")
+        // Fake, reconciliation: the mutation applies but its answer is lost (UnknownOutcome); the marker is found and
+        // the files at the marker commit are compared, the large one through one blob read.
+        let server, p = scriptableFake ()
+        let reconciled = saveLarge p (fun () -> server.Script [ LoseAfterApplying TimedOut ])
+        Assert.Contains(reconciled, fun r -> r.Url.Contains "/compare/")
 
-        match GitHubProvider.interpretContents tooLarge with
-        | ContentsTooLarge(_, sha) as read ->
-            Assert.Equal("abc123", sha)
-            let retry = (GitHubProvider.largeFileRetry (id ()) Conformance.fakeConnection 0 read).Value
-            Assert.EndsWith("/git/blobs/abc123", retry.Url)
-            Assert.Equal(None, GitHubProvider.largeFileRetry (id ()) Conformance.fakeConnection 1 read)
-        | other -> failwithf "expected ContentsTooLarge, got %A" other
-
-        // Live.
-        let p = live "probe/persist007-large"
-        let h = head p
-
-        let commit =
-            p.Execute(GitHubRequests.createCommitOnBranch (id ()) p.Connection h "large file" [ RepoPath "probes/large/big.txt", large ])
-            |> Conformance.commitOid
-            |> Option.get
-
-        let read = GitHubProvider.interpretContents (p.Execute(GitHubRequests.contentsAt (id ()) p.Connection (CommitOid commit) (RepoPath "probes/large/big.txt")))
-
-        let bytes =
-            match read with
-            | ContentsBytes(_, b) -> b
-            | ContentsTooLarge _ ->
-                match GitHubProvider.largeFileRetry (id ()) p.Connection 0 read with
-                | Some blob ->
-                    match GitHubProvider.interpretContents (p.Execute blob) with
-                    | ContentsBytes(_, b) -> b
-                    | other -> failwithf "blob re-read failed: %A" other
-                | None -> failwith "no re-read offered"
-            | ContentsUnreadable e -> failwithf "contents unreadable: %A" e
-
-        Assert.Equal<byte[]>(large, bytes)
+        // Live: the same save against the write-test repository on a fresh branch.
+        saveLarge (live "probe/persist007-large") ignore |> ignore

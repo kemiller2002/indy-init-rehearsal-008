@@ -357,29 +357,48 @@ module SaveProcess =
         | AllMatch of Confirmation.T
         | Differ
         | Unreadable
+        /// The contents API answered `encoding: none` for this file (over 1 MB): re-read its blob once (GH-LARGE-FILE).
+        | RereadBlob of blobSha: string
 
     /// One file of a re-read at `commit`: compared with the bytes written; the files are read manifest, events,
-    /// snapshot, each a single request.
+    /// snapshot, each a single contents request. A file over 1 MB takes exactly one more request, the blob read its
+    /// contents answer names (GH-LARGE-FILE, largeFileRereads 1): the blob answer is matched to the written file by
+    /// its Git blob sha and then compared byte for byte. A blob answer never leads to another blob read (it names no
+    /// path, so it is never the large-file form), which bounds the re-reads to one per file.
     let private checkFile (setup: SaveSetup) (session: InvestigationSession) (commit: CommitOid) (outcome: HttpOutcome) =
+        let written = setup.FileSetOf session
+        let slots = List.zip (paths session.Id) (filesInOrder written)
+
+        let compareAt (index: int) (bytes: byte[]) =
+            if snd slots[index] <> bytes then
+                Differ
+            elif index < slots.Length - 1 then
+                NextFile(fst slots[index + 1])
+            else
+                // The earlier files were each compared equal before this one was requested.
+                match Confirmation.ofReadBack session.Id commit (commitTime outcome) written { written with Snapshot = bytes } with
+                | Some c -> AllMatch c
+                | None -> Differ
+
+        let slotOfPath (path: string) = slots |> List.tryFindIndex (fun (RepoPath p, _) -> p = path)
+
         match (classify (Read "rest:contents") outcome).Result with
         | Ok answer ->
-            match Answers.contents answer.Body with
-            | Some(path, bytes) ->
-                let written = setup.FileSetOf session
-                let slots = List.zip (paths session.Id) (filesInOrder written)
-
-                match slots |> List.tryFindIndex (fun (RepoPath p, _) -> p = path) with
-                | Some i when snd slots[i] = bytes ->
-                    if i < slots.Length - 1 then
-                        NextFile(fst slots[i + 1])
-                    else
-                        // The earlier files were each compared equal before this one was requested.
-                        match Confirmation.ofReadBack session.Id commit (commitTime outcome) written { written with Snapshot = bytes } with
-                        | Some c -> AllMatch c
-                        | None -> Differ
-                | Some _ -> Differ
+            match Answers.contents answer.Body, Answers.largeFile answer.Body, Answers.blob answer.Body with
+            | Some(path, bytes), _, _ ->
+                match slotOfPath path with
+                | Some i -> compareAt i bytes
                 | None -> Unreadable
-            | None -> Unreadable
+            | None, Some(path, sha), _ ->
+                match slotOfPath path with
+                | Some _ -> RereadBlob sha
+                | None -> Unreadable
+            | None, None, Some(sha, bytes) ->
+                // The blob read names the file by its sha; a sha that is no written file's is different bytes.
+                match slots |> List.tryFindIndex (fun (_, w) -> Answers.gitBlobSha w = sha) with
+                | Some i -> compareAt i bytes
+                | None -> Differ
+            | None, None, None -> Unreadable
         // A refused read (a 404 included) says nothing about the bytes at the commit: the read failed, so the save goes
         // to the reconcile path (SM-SAVE ReadBackReadFailed / ReconcileReadFailed), never "different bytes" (T36 F-06).
         | Error _ -> Unreadable
@@ -455,12 +474,14 @@ module SaveProcess =
                 | AllMatch confirmation -> MachineEvent(SaveInput.ReadBackMatched confirmation)
                 | Differ -> MachineEvent(SaveInput.ReadBackMismatched commit)
                 | Unreadable -> MachineEvent SaveInput.ReadBackReadFailed
+                | RereadBlob sha -> next (ReadBackAt commit) (GitHubRequests.blob context.NextId context.Connection sha)
             | ReconcileFilesAt commit ->
                 match checkFile setup session commit outcome with
                 | NextFile path -> next (ReconcileFilesAt commit) (GitHubRequests.contentsAt context.NextId context.Connection commit path)
                 | AllMatch confirmation -> MachineEvent(SaveInput.ReconcileMarkerBytesMatch confirmation)
                 | Differ -> MachineEvent(SaveInput.ReconcileMarkerBytesDiffer commit)
                 | Unreadable -> MachineEvent SaveInput.ReconcileReadFailed
+                | RereadBlob sha -> next (ReconcileFilesAt commit) (GitHubRequests.blob context.NextId context.Connection sha)
             | FreshHead ->
                 match (classify (Read "rest:ref") outcome).Result with
                 | Ok answer ->
