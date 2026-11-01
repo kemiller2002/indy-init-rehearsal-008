@@ -117,7 +117,12 @@ module ErrorMatrix =
         { Class: MatrixClass
           Result: Result<ProviderAnswer, ProviderError> }
 
-    type GraphQLError = { Type: string option; Message: string }
+    /// One GraphQL `errors[]` entry: its type, message and the response path it names (field names and list
+    /// indices as text; empty when GitHub names none).
+    type GraphQLError =
+        { Type: string option
+          Message: string
+          Path: string list }
 
     let private header (name: string) (headers: (string * string) list) : string option =
         headers
@@ -153,8 +158,57 @@ module ErrorMatrix =
         | Some arr when arr.ValueKind = JsonValueKind.Array ->
             [ for e in arr.EnumerateArray() ->
                   { Type = prop "type" e |> Option.bind str
-                    Message = prop "message" e |> Option.bind str |> Option.defaultValue "" } ]
+                    Message = prop "message" e |> Option.bind str |> Option.defaultValue ""
+                    Path =
+                      match prop "path" e with
+                      | Some p when p.ValueKind = JsonValueKind.Array ->
+                          [ for step in p.EnumerateArray() ->
+                                match step.ValueKind with
+                                | JsonValueKind.String -> str step |> Option.defaultValue ""
+                                | _ -> step.ToString() ]
+                      | _ -> [] } ]
         | _ -> []
+
+    /// The form GitHub answers for `Commit.file(path:)` when the commit's tree has no such path (CR-T21-01, seen live
+    /// in run 41340579555): a GraphQL error of type NOT_FOUND, "Could not resolve file for path '<path>'.".
+    let private missingPathPattern = Regex("^Could not resolve file for path '[^']+'\\.?$", RegexOptions.CultureInvariant)
+
+    let private dataAt (steps: string list) (body: JsonElement option) : JsonElement option =
+        steps
+        |> List.fold
+            (fun acc step ->
+                acc
+                |> Option.bind (fun (e: JsonElement) ->
+                    match e.ValueKind with
+                    | JsonValueKind.Object -> prop step e
+                    | JsonValueKind.Array ->
+                        match Int32.TryParse step with
+                        | true, i when i >= 0 && i < e.GetArrayLength() -> Some(e.[i])
+                        | _ -> None
+                    | _ -> None))
+            (body |> Option.bind (prop "data"))
+
+    /// The commit a file read answered at: `data.repository.ref.target.oid` (at a branch) or
+    /// `data.repository.object.oid` (at a named commit).
+    let private commitOidOfRead (body: JsonElement option) : string option =
+        dataAt [ "repository"; "ref"; "target"; "oid" ] body
+        |> Option.orElse (dataAt [ "repository"; "object"; "oid" ] body)
+        |> Option.bind str
+
+    /// R-07 (CR-T21-01): a file read at a commit that exists, where the error says the commit's tree has no such
+    /// path, says the file is absent; it is not a refusal. The matrix's GraphQL GH-NOT-FOUND is a missing branch or
+    /// ref, never a missing path inside a commit that was found. Only with the commit oid in the answer, and only when
+    /// the field the error names (if it names one) answered null; everything else keeps its class.
+    let isAbsentFile (body: JsonElement option) (e: GraphQLError) : bool =
+        e.Type = Some "NOT_FOUND"
+        && missingPathPattern.IsMatch e.Message
+        && (commitOidOfRead body).IsSome
+        && (match e.Path with
+            | [] -> true
+            | steps ->
+                match dataAt steps body with
+                | None -> true
+                | Some v -> v.ValueKind = JsonValueKind.Null)
 
     let private restMessage (body: JsonElement option) : string =
         body |> Option.bind (prop "message") |> Option.bind str |> Option.defaultValue ""
@@ -258,7 +312,14 @@ module ErrorMatrix =
         | NotAnswered(_, failure) -> refuse GhNetworkAfter (NetworkUnavailable failure)
         | Answered(id, status, headers, rawBody) ->
             let body = tryParse rawBody
-            let errors = graphQLErrors body
+
+            let errors =
+                match context with
+                // R-07: on a read, a missing path inside a found commit is an absent file, decoded by the reader.
+                | Read _ -> graphQLErrors body |> List.filter (isAbsentFile body >> not)
+                | Mutation _
+                | ConnectRepository
+                | Compare _ -> graphQLErrors body
             let message = restMessage body
             let remaining = header "x-ratelimit-remaining" headers
             let retryAfter = header "retry-after" headers
