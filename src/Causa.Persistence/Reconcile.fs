@@ -13,6 +13,19 @@ type CompareView =
       Total: int64
       Files: string list option }
 
+[<RequireQualifiedAccess>]
+module CompareView =
+    /// GitHub's compare lists at most 300 changed files for the whole comparison and sets no truncation flag.
+    let fileListLimit = 300
+
+    /// The changed file names when the answer proves the list complete: every commit after base listed, and fewer
+    /// files than GitHub's cap. A list of exactly the cap or more may be truncated, so it is unknown (review T36 F-01):
+    /// a caller treats unknown as "the investigation possibly changed" and never overwrites on it (PERSIST-011).
+    let completeFiles (view: CompareView) : string list option =
+        match view.Files with
+        | Some files when view.Total = int64 view.Commits.Length && files.Length < fileListLimit -> Some files
+        | _ -> None
+
 /// A file set read in one GraphQL query: the commit it was read at and the three files (None when a file is absent).
 type FileSetRead =
     { At: CommitOid

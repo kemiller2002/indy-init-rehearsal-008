@@ -583,3 +583,93 @@ module SMSAVE =
         let (CommitOid b) = base'
         Assert.All(bodies, fun body -> Assert.Contains(sprintf "\"expectedHeadOid\":\"%s\"" b, body))
         Assert.NotEqual<string>(bodies[0], bodies[1])
+
+    // ----- Review T36 F-01: GitHub's compare lists at most 300 changed files and flags no truncation. A list at the
+    // cap is unknown, so the save fails closed to Conflict (T-S16) instead of rebasing over another writer's change.
+
+    let private bulkFiles (n: int) =
+        [ for i in 1..n -> sprintf "bulk/%04d.json" i, Text.Encoding.UTF8.GetBytes(string i) ]
+
+    [<Fact>]
+    let BulkCommitHidingTheInvestigationPastThreeHundredFilesIsAConflict () =
+        let handle, session = opened ()
+        let (RepoPath events) = StoragePaths.events investigation
+        // One commit touching 300 other files and this investigation's events: the fake, like GitHub, lists 300.
+        let other =
+            handle.Server.Mutate(StatefulFake.commitOnBranch "main" "bulk import" (bulkFiles 300 @ [ events, Text.Encoding.UTF8.GetBytes "theirs" ]))
+
+        let after = saveOnce handle session
+        Assert.Equal("Conflict", stateName after)
+        Assert.Equal<CommandEnvelope list>([ command 1 ], after.Unsaved)
+        Assert.Equal(other, InvariantFake.head handle)
+        Assert.Equal(1, handle.Server.State.Log |> List.map fst |> List.filter isMutation |> List.length)
+
+    [<Fact>]
+    let ExactlyThreeHundredFilesInOneCommitIsAConflict () =
+        let handle, session = opened ()
+        let other = handle.Server.Mutate(StatefulFake.commitOnBranch "main" "bulk import" (bulkFiles 300))
+        let after = saveOnce handle session
+        Assert.Equal("Conflict", stateName after)
+        Assert.Equal(other, InvariantFake.head handle)
+
+    [<Fact>]
+    let TwoHundredNinetyNineUnrelatedFilesStillRebase () =
+        let handle, session = opened ()
+        let other = handle.Server.Mutate(StatefulFake.commitOnBranch "main" "bulk import" (bulkFiles 299))
+        let saved = saveOnce handle session
+        Assert.Equal("Saved", stateName saved)
+        Assert.True(InvariantFake.reachableFromHead handle other)
+        Assert.Equal(1, saved.RebaseAttempts)
+
+    /// A GitHub-shaped compare answer: one commit after base and `files` changed names, none under the investigation.
+    let private compareBody (message: string) (files: int) =
+        let names = [ for i in 1..files -> sprintf """{"filename":"bulk/%04d.json"}""" i ] |> String.concat ","
+        let (CommitOid c) = head 3
+
+        sprintf
+            """{"status":"ahead","ahead_by":1,"behind_by":0,"total_commits":1,"commits":[{"sha":"%s","commit":{"message":%s}}],"files":[%s]}"""
+            c
+            (Text.Json.JsonSerializer.Serialize message)
+            names
+
+    let private answer (body: string) = Answered(RequestId 7L, 200, [], body)
+    let private awaiting (a: Awaiting) = { saving with Outstanding = Some(RequestId 7L, a) }
+
+    [<Fact>]
+    let RebaseCompareAtTheFileCapCountsAsChanged () =
+        let at files = online.Interpret (ctx 50L) (awaiting (FileComparisonAt(head 3))) (answer (compareBody "other" files))
+        Assert.Equal(MachineEvent(SaveInput.StaleHeadSameInvestigation(head 3)), at 300)
+        Assert.Equal(MachineEvent(SaveInput.StaleHeadSameInvestigation(head 3)), at 301)
+        Assert.Equal(MachineEvent(SaveInput.StaleHeadUnrelated(head 3)), at 299)
+
+    [<Fact>]
+    let ReconciliationCompareAtTheFileCapCountsAsChanged () =
+        let reconciling = { unknownIn with Outstanding = Some(RequestId 7L, ReconcileCommits 1) }
+        let at message files = online.Interpret (ctx 50L) reconciling (answer (compareBody message files))
+        Assert.Equal(MachineEvent(SaveInput.StaleHeadSameInvestigation(head 3)), at "other" 300)
+        Assert.Equal(MachineEvent(SaveInput.ReconcileNothingWrittenHeadMoved(head 3)), at "other" 299)
+
+        // Precedence kept: this tab's marker on the first commit is checked by reading its files, whatever the list.
+        let marked = "save\n\n" + Markers.trailer { Session = tab; Sequence = 1L }
+
+        match at marked 300 with
+        | NextRequest(next, _) -> Assert.Equal(Some(RequestId 50L, ReconcileFilesAt(head 3)), next.Outstanding)
+        | other -> Assert.Fail(sprintf "the marker commit was not read: %A" other)
+
+    // ----- Review T36 F-06: a 404 on the mutation endpoint is an unknown outcome, reconciled; a 404 on a read-back
+    // is a failed read (reconcile path), never "different bytes".
+
+    let private notFound = Answered(RequestId 7L, 404, [], """{"message":"Not Found"}""")
+
+    [<Fact>]
+    let MutationEndpoint404IsAnUnknownOutcome () =
+        Assert.Equal(MachineEvent SaveInput.AnswerLost, online.Interpret (ctx 50L) saving notFound)
+        let s, _ = step saving SaveInput.AnswerLost
+        Assert.Equal("UnknownOutcome", stateName s)
+
+    [<Fact>]
+    let ReadBack404IsAFailedReadNotDifferentBytes () =
+        Assert.Equal(MachineEvent SaveInput.ReadBackReadFailed, online.Interpret (ctx 50L) (awaiting (ReadBackAt(head 3))) notFound)
+
+        let reconciling = { unknownIn with Outstanding = Some(RequestId 7L, ReconcileFilesAt(head 3)) }
+        Assert.Equal(MachineEvent SaveInput.ReconcileReadFailed, online.Interpret (ctx 50L) reconciling notFound)
