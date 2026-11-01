@@ -33,7 +33,9 @@ type ShellState =
     { Booted: bool
       Path: string
       Hash: string
-      Workspace: Workspace }
+      Workspace: Workspace
+      /// WI-R8-T28: the version the history region shows (read-only time travel; it never changes Workspace).
+      History: Views.History.Selection }
 
 [<RequireQualifiedAccess>]
 module Workspace =
@@ -73,7 +75,8 @@ module View =
         { Booted = false
           Path = "/"
           Hash = ""
-          Workspace = Workspace.empty }
+          Workspace = Workspace.empty
+          History = Views.History.Latest }
 
     /// The page link of the tab-local investigation (it lives on the start screen until it is saved).
     let private tabInvestigationHref = Routes.format AppRoute.InvestigationStart
@@ -113,6 +116,11 @@ module View =
     let private reportKeys (workspace: Workspace) : ShellView =
         let report = Views.Report.view Workspace.policy Workspace.actor workspace.History
         flat report.Keys @ (report.Lists |> List.map (fun (name, rows) -> name, Rows rows))
+    /// History, time travel and semantic diff (Views/History.fs, ui-2, WI-R8-T28): the same workspace history replayed
+    /// to the selected version; read-only.
+    let private historyKeys (state: ShellState) : ShellView =
+        let history = Views.History.project Workspace.policy Workspace.actor state.Workspace.History state.History
+        flat history.Keys @ (history.Lists |> List.map (fun (name, rows) -> name, Rows rows))
 
     /// Pure: state to the complete view.
     let render (state: ShellState) : ShellView =
@@ -125,3 +133,4 @@ module View =
         @ flat (renderWorkspace state.Hash state.Workspace)
         @ graphKeys state.Workspace
         @ reportKeys state.Workspace
+        @ historyKeys state

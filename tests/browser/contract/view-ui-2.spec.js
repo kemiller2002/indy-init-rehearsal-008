@@ -5,6 +5,10 @@
 //     (WDL-002, WDL-005);
 //   - the same history gives the same document and the same placement (UI-002-O4, WDL-009);
 //   - the same nodes and relationships are listed as text (ADRP-007-O1, UI-002-O4).
+//
+// WI-R8-T28 (S14, S15; DEC-R7-005): the history region (Views/History.fs) is the kernel's history replayed to a chosen
+// version. The timeline is in canonical version order; the scrubber shows state-at-version and a semantic diff to the
+// latest version in the kernel's terms; a historical version is visibly read-only and never changes the investigation.
 import { expect, test } from "../support/fixtures.js";
 
 const submit = (page, name) => page.locator("[data-causa-workspace]").getByRole("button", { name, exact: true }).click();
@@ -81,6 +85,69 @@ test("renders the projection", async ({ page, causa, failures }) => {
   expect(await documentOf(page)).toEqual(projected);
   await expect(engineNodes(page)).toHaveCount(4, { timeout: 30_000 });
   await expect.poll(() => placement(page)).toEqual(first);
+
+  expect(failures).toEqual([]);
+});
+
+const history = (page) => page.locator("[data-causa-region='history']");
+const scrubTo = (page, version) =>
+  page.locator("[data-causa-history-scrubber]").evaluate((input, v) => {
+    input.value = String(v);
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  }, version);
+
+test("time travel and semantic diff", async ({ page, causa, failures }) => {
+  await causa.open("#/investigations/new");
+  // No investigation: no history, and the page says so.
+  await expect(history(page).locator("[data-causa-history-empty]")).toBeVisible();
+  await expect(history(page).locator("[data-causa-history-body]")).toBeHidden();
+
+  await buildInvestigation(page, causa);
+
+  // The aggregate-version timeline with event summaries, in canonical version order (ADRP-007-O2).
+  const timeline = history(page).locator("[data-causa-history-timeline] li");
+  await expect(timeline).toHaveText([
+    "Version 1: Investigation started (InvestigationStarted).",
+    "Version 2: Observation recorded (ObservationRecorded).",
+    "Version 3: Observation recorded (ObservationRecorded).",
+    "Version 4: Investigation activated (InvestigationActivated).",
+    "Version 5: Conclusion recorded (ConclusionRecorded)."
+  ]);
+  await expect(history(page)).toHaveAttribute("data-history-mode", "latest");
+  await expect(history(page).locator("[data-causa-history-at]")).toHaveText("5");
+  await expect(history(page).locator("[data-causa-history-readonly]")).toBeHidden();
+  await expect(timeline.nth(4)).toHaveAttribute("aria-current", "true");
+  await expect(history(page).locator("[data-causa-history-diff] li")).toHaveCount(0);
+
+  // Scrub to version 2: the state the kernel replays at version 2, visibly read-only.
+  await scrubTo(page, 2);
+  await expect(history(page)).toHaveAttribute("data-history-mode", "historical");
+  await expect(history(page).locator("[data-causa-history-readonly]")).toHaveText(
+    "Viewing version 2 of 5. Historical view: read-only; the investigation is unchanged."
+  );
+  await expect(history(page).locator("[data-causa-history-lifecycle]")).toHaveText("Draft");
+  await expect(timeline.nth(1)).toHaveAttribute("aria-current", "true");
+  await expect(timeline.nth(4)).toHaveAttribute("aria-current", "false");
+
+  // The semantic diff from version 2 to the latest, in the kernel's terms; nothing inferred.
+  const diff = history(page).locator("[data-causa-history-diff] li");
+  await expect(diff.filter({ hasText: "Lifecycle: Draft to Active." })).toHaveCount(1);
+  await expect(diff.filter({ hasText: "Added Observation 2 (ObservationRecorded, version 3)." })).toHaveCount(1);
+  await expect(diff.filter({ hasText: "Added Conclusion 1 (ConclusionRecorded, version 5)." })).toHaveCount(1);
+  await expect(diff.filter({ hasText: "Added Observation 1" })).toHaveCount(0);
+  await expect(history(page).locator("[data-causa-history-diff-summary]")).toHaveText(/^From version 2 to version 5: \d+ changes\.$/);
+  await expect(history(page).locator("[data-causa-history-policy]")).toContainText("No policy or domain-version change");
+
+  // Time travel never changes the live investigation: the workspace still reads version 5, Active.
+  await expect(page.locator("[data-causa-version]")).toHaveText("5");
+  await expect(page.locator("[data-causa-lifecycle]")).toHaveText("Active");
+  await expect(graph(page)).toHaveAttribute("data-projection-version", "5");
+
+  // Return to the latest version.
+  await history(page).getByRole("button", { name: "Return to the latest version" }).click();
+  await expect(history(page)).toHaveAttribute("data-history-mode", "latest");
+  await expect(history(page).locator("[data-causa-history-readonly]")).toBeHidden();
+  await expect(history(page).locator("[data-causa-history-lifecycle]")).toHaveText("Active");
 
   expect(failures).toEqual([]);
 });

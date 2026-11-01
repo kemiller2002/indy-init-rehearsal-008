@@ -88,6 +88,8 @@ module Program =
                     Booted = true
                     Path = path
                     Hash = if Routes.isRouteHash hash then hash else state.Hash }
+            | Incoming.Event((Views.History.SelectEvent | Views.History.LatestEvent) as name, value) ->
+                { state with History = Views.History.select state.Workspace.History state.History name value }
             | Incoming.Event(name, _) ->
                 match Workspace.commandOfEvent name with
                 | Some command -> { state with Workspace = Submit.command state.Workspace command }
