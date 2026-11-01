@@ -304,6 +304,9 @@ module SaveProcess =
             Ok(failed session HistoryWasRewritten "Save failed: the branch history was rewritten. Your changes are kept.") // T-S28
         | SaveState.UnknownOutcome _, SaveInput.ReconcileReadFailed when session.ReconcileReads < maxAutomaticReads ->
             Ok(scheduleRead session) // T-S29
+        // The last automatic read (or a Check again read) failed: no automatic read is left, so it is the
+        // ReconcileReadsSpent decision (offer Check again), never a fault that leaves the read marked outstanding (T32).
+        | SaveState.UnknownOutcome _, SaveInput.ReconcileReadFailed
         | SaveState.UnknownOutcome _, SaveInput.ReconcileReadsSpent ->
             Ok(
                 { session with State = SaveState.UnknownOutcome 0; ReconcileReads = maxAutomaticReads; Outstanding = None },
@@ -394,6 +397,34 @@ module SaveProcess =
         | Some files -> files |> List.exists (StoragePaths.isUnder session.Id)
         | None -> true
 
+    /// Page 1 of the paged compare base...head after an unknown outcome (PERSIST-015, GH-TRUNCATED-LIST), decided by
+    /// marker and head with this one read, however many commits follow the base head (T32, D-PTESTS-01):
+    /// - the marker: a mutation guarded by the base head that applied is the first commit after it, and page 1 lists
+    ///   the oldest commits first;
+    /// - otherwise nothing was written, and the file list GitHub gives on page 1 covers the entire comparison (up to its
+    ///   300-file cap): a change to the investigation's files, or an unknown list, is the stale-head conflict; else
+    ///   the head moved, to the head the comparison names (its last commit when every commit is listed, else the head
+    ///   of the requested range GitHub echoes in the answer's url). A head it cannot name is a failed read.
+    let private reconcileFirstPage setup (context: RequestContext) (session: InvestigationSession) (body: string) (view: CompareView) =
+        match view.Commits with
+        | [] -> MachineEvent SaveInput.ReconcileReadFailed
+        | (first, message) :: _ when Markers.ofSession setup.Tab message ->
+            NextRequest(
+                { session with Outstanding = Some(context.NextId, ReconcileFilesAt first) },
+                GitHubRequests.contentsAt context.NextId context.Connection first (StoragePaths.manifest session.Id)
+            )
+        | commits ->
+            let head =
+                if view.Total = int64 commits.Length then Some(fst (List.last commits)) else Answers.compareHead body
+
+            match CompareView.firstPageFiles view, head with
+            // Unknown counts as changed: never overwrite on a guess (PERSIST-011, review T36 F-01).
+            | None, _ -> MachineEvent(SaveInput.StaleHeadSameInvestigation(defaultArg head (fst (List.last commits))))
+            | Some files, _ when files |> List.exists (StoragePaths.isUnder session.Id) ->
+                MachineEvent(SaveInput.StaleHeadSameInvestigation(defaultArg head (fst (List.last commits))))
+            | Some _, Some head -> MachineEvent(SaveInput.ReconcileNothingWrittenHeadMoved head)
+            | Some _, None -> MachineEvent SaveInput.ReconcileReadFailed
+
     let interpret (setup: SaveSetup) (context: RequestContext) (session: InvestigationSession) (outcome: HttpOutcome) : Interpretation =
         let id = outcomeId outcome
         let next awaiting request = NextRequest({ session with Outstanding = Some(context.NextId, awaiting) }, request)
@@ -452,27 +483,14 @@ module SaveProcess =
                 | Ok answer ->
                     match Answers.headOid answer.Body with
                     | Some head when head = session.BaseHead -> MachineEvent SaveInput.ReconcileNothingWrittenHeadUnchanged
-                    | Some head -> next (ReconcileCommits 1) (GitHubRequests.compareAll context.NextId context.Connection session.BaseHead head)
+                    | Some head -> next (ReconcileCommits 1) (GitHubRequests.compare context.NextId context.Connection session.BaseHead head 1)
                     | None -> MachineEvent SaveInput.ReconcileReadFailed
                 | Error _ -> MachineEvent SaveInput.ReconcileReadFailed
             | ReconcileCommits _ ->
                 match (classify (Compare session.BaseHead) outcome).Result with
                 | Ok answer ->
                     match Answers.compare answer.Body with
-                    | Some view ->
-                        // A mutation guarded by the base head that applied is the first commit after it.
-                        match view.Commits with
-                        | (first, message) :: _ when Markers.ofSession setup.Tab message ->
-                            next (ReconcileFilesAt first) (GitHubRequests.contentsAt context.NextId context.Connection first (StoragePaths.manifest session.Id))
-                        | [] -> MachineEvent SaveInput.ReconcileReadFailed
-                        | commits when view.Total = int64 commits.Length ->
-                            let head = fst (List.last commits)
-
-                            if investigationChanged session view then
-                                MachineEvent(SaveInput.StaleHeadSameInvestigation head)
-                            else
-                                MachineEvent(SaveInput.ReconcileNothingWrittenHeadMoved head)
-                        | _ -> MachineEvent SaveInput.ReconcileReadFailed
+                    | Some view -> reconcileFirstPage setup context session answer.Body view
                     | None -> MachineEvent SaveInput.ReconcileReadFailed
                 | Error(HistoryRewritten _) -> MachineEvent SaveInput.ReconcileHistoryRewritten
                 | Error _ -> MachineEvent SaveInput.ReconcileReadFailed
