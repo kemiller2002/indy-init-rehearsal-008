@@ -277,6 +277,43 @@
                 </ef-print-table>
               </ef-print-document>
             </section>
+            <!-- WI-R8-T28: history, time travel and semantic diff (S14, S15). Its content is the F# projection
+                 (Views/History.fs): the kernel's history replayed to the chosen version. A historical version is
+                 read-only and never changes the investigation; the diff compares two replays in the kernel's terms. -->
+            <section class="causa-history" aria-labelledby="causa-history-heading" data-causa-region="history" data-bind-data-projection-version="projectionVersion" data-bind-data-history-mode="historyMode">
+              <h4 id="causa-history-heading">History</h4>
+              <p data-causa-history-empty data-bind-hidden="historyEmptyHidden">No history yet: start an investigation to see its versions.</p>
+              <div data-causa-history-body data-bind-hidden="historyBodyHidden" hidden>
+                <p class="causa-history-readonly" role="status" data-causa-history-readonly data-bind-hidden="historyReadOnlyHidden" data-text="historyReadOnlyText" hidden></p>
+                <p>
+                  <label for="causa-history-scrubber">Version <span data-text="historyAtVersion" data-causa-history-at>0</span> of <span data-text="historyLatestVersion" data-causa-history-latest>0</span></label>
+                  <input id="causa-history-scrubber" type="range" min="1" step="1" data-causa-history-scrubber data-bind-max="historyLatestVersion" data-bind-value="historyAtVersion" data-event="history.at">
+                  <ef-button><button type="button" data-event="history.latest" data-causa-history-return data-bind-hidden="historyReadOnlyHidden" hidden>Return to the latest version</button></ef-button>
+                </p>
+                <p role="alert" data-bind-hidden="historyFaultHidden" data-text="historyFault" hidden></p>
+                <h5 id="causa-history-timeline-heading">Timeline</h5>
+                <ol class="causa-history-timeline" data-causa-history-timeline aria-labelledby="causa-history-timeline-heading">
+                  <template data-each="historyTimeline" data-key="key"><li data-bind-aria-current="current" data-text="text"></li></template>
+                </ol>
+                <h5 id="causa-history-state-heading">State at version <span data-text="historyAtVersion">0</span></h5>
+                <dl class="causa-projection" data-causa-history-state aria-labelledby="causa-history-state-heading">
+                  <div><dt>State</dt><dd data-text="historyStateLifecycle" data-causa-history-lifecycle>No investigation</dd></div>
+                  <div><dt>Observations</dt><dd data-text="historyStateObservations">0</dd></div>
+                  <div><dt>Hypotheses</dt><dd data-text="historyStateHypotheses">0</dd></div>
+                  <div><dt>Conclusions</dt><dd data-text="historyStateConclusions">0</dd></div>
+                </dl>
+                <ul class="causa-history-capabilities" data-causa-history-capabilities aria-label="Actions at this version">
+                  <template data-each="historyCapabilities" data-key="key"><li><span data-text="command"></span>: <span data-text="availability"></span></li></template>
+                </ul>
+                <h5 id="causa-history-diff-heading">Semantic diff</h5>
+                <p data-causa-history-diff-summary data-text="historyDiffSummary"></p>
+                <ul class="causa-history-diff" data-causa-history-diff aria-labelledby="causa-history-diff-heading">
+                  <template data-each="historyDiff" data-key="key"><li data-bind-data-category="category" data-text="text"></li></template>
+                </ul>
+                <p data-causa-history-supersession data-text="historySupersessionText"></p>
+                <p data-causa-history-policy data-text="historyPolicyText"></p>
+              </div>
+            </section>
             <!-- WI-R8-T22: S23 conflict review (Forma conflict review), shown only when SM-SAVE is in Conflict. -->
             <section class="ef-conflict-review" aria-labelledby="causa-conflict-heading" data-causa-conflict-review data-bind-hidden="conflictReviewHidden" hidden>
               <header class="ef-conflict-review__header"><h4 id="causa-conflict-heading">Conflict with GitHub</h4></header>

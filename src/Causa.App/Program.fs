@@ -104,6 +104,8 @@ module Program =
                 Booted = true
                 Path = path
                 Hash = if Routes.isRouteHash hash then hash else state.Hash }
+        | Incoming.Event((Views.History.SelectEvent | Views.History.LatestEvent) as name, value) ->
+            { state with History = Views.History.select state.Workspace.History state.History name value }
         | Incoming.Event(name, _) ->
             match Workspace.commandOfEvent name with
             | Some command -> { state with Workspace = Submit.command state.Workspace command }
@@ -224,31 +226,6 @@ module Program =
                 run tab (Browser(HttpCompleted outcome))
         | None -> run tab (Browser(HttpCompleted outcome))
 
-    /// The next tab and the effects the engine asks for. Impure only through `newCommandId` (the edge's identities).
-    let stepTab (newCommandId: unit -> Guid) (tab: Tab) (message: Incoming) : Tab * HostEffect list =
-        // A command for a wired investigation is decided by its save session alone, never also by the tab-local
-        // workspace (CRT22B review).
-        let wired =
-            match message with
-            | Incoming.Event(name, _) ->
-                (Workspace.commandOfEvent name).IsSome
-                && (tab.Active |> Option.exists tab.Engine.Sessions.ContainsKey)
-            | _ -> false
-
-        let tab = if wired then tab else { tab with Shell = stepShell tab.Shell message }
-
-        match message with
-        | Incoming.Event(name, value) -> onEvent newCommandId tab name value
-        | Incoming.EffectResult(Some outcome) -> onOutcome tab outcome
-        | _ -> tab, []
-
-    let private flat (keys: Views.ShellKeys) : ShellView =
-        keys
-        |> List.map (fun (name, value) ->
-            match value with
-            | Views.Str s -> name, Text s
-            | Views.Bit b -> name, Flag b)
-
     /// The history the page shows for the open investigation: the verified base read from GitHub plus the kernel's
     /// events for the commands not yet confirmed (AppEngine.decideAll). None until the engine has loaded it.
     let private wiredHistory (tab: Tab) : EventEnvelope list option =
@@ -263,6 +240,37 @@ module Program =
 
                     history
                 | None -> opened.History))
+
+    /// The next tab and the effects the engine asks for. Impure only through `newCommandId` (the edge's identities).
+    let stepTab (newCommandId: unit -> Guid) (tab: Tab) (message: Incoming) : Tab * HostEffect list =
+        // A command for a wired investigation is decided by its save session alone, never also by the tab-local
+        // workspace (CRT22B review).
+        let wired =
+            match message with
+            | Incoming.Event(name, _) ->
+                (Workspace.commandOfEvent name).IsSome
+                && (tab.Active |> Option.exists tab.Engine.Sessions.ContainsKey)
+            | _ -> false
+
+        let tab =
+            match message, wiredHistory tab with
+            | _ when wired -> tab
+            // T28 history selection reads the history the page shows: the open investigation's, once wired.
+            | Incoming.Event((Views.History.SelectEvent | Views.History.LatestEvent) as name, value), Some history ->
+                { tab with Shell = { tab.Shell with History = Views.History.select history tab.Shell.History name value } }
+            | _ -> { tab with Shell = stepShell tab.Shell message }
+
+        match message with
+        | Incoming.Event(name, value) -> onEvent newCommandId tab name value
+        | Incoming.EffectResult(Some outcome) -> onOutcome tab outcome
+        | _ -> tab, []
+
+    let private flat (keys: Views.ShellKeys) : ShellView =
+        keys
+        |> List.map (fun (name, value) ->
+            match value with
+            | Views.Str s -> name, Text s
+            | Views.Bit b -> name, Flag b)
 
     /// Pure: the complete view. The engine's keys replace the tab-local indicator, header and review once an
     /// investigation is open in the engine; the Connect form keys are always the engine's.
