@@ -35,47 +35,80 @@ module Update =
             history @ events, CommandAccepted(command, events)
         | decision -> history, CommandRefused(command, decision)
 
+    /// Review F-03: Export writes every command exactly as the session holds it (the frozen CommandEnvelope: identity,
+    /// investigation and the version it was decided on), in order, so the work can be re-decided after a Discard. The
+    /// frozen envelope carries no command body (DEV-R8-09); the kernel decides from the envelope and the state.
+    let exportJson (commands: CommandEnvelope list) : string =
+        let envelope (c: CommandEnvelope) =
+            let (InvestigationId investigation) = c.Investigation
+            let o = System.Text.Json.Nodes.JsonObject()
+            o["commandId"] <- System.Text.Json.Nodes.JsonValue.Create(c.CommandId.ToString "D")
+            o["investigation"] <- System.Text.Json.Nodes.JsonValue.Create(investigation.ToString "D")
+
+            // A command decided on no investigation yet has no expected version: JSON null.
+            match c.ExpectedVersion with
+            | Some(AggregateVersion v) -> o["expectedVersion"] <- System.Text.Json.Nodes.JsonValue.Create v
+            | None -> o.Add("expectedVersion", (null: System.Text.Json.Nodes.JsonNode | null))
+
+            o :> System.Text.Json.Nodes.JsonNode
+
+        let root = System.Text.Json.Nodes.JsonObject()
+        root["format"] <- System.Text.Json.Nodes.JsonValue.Create "causa-unsaved-commands/1"
+        root["commands"] <- System.Text.Json.Nodes.JsonArray(commands |> List.map envelope |> Array.ofList)
+        root.ToJsonString()
+
     /// A save machine effect as the host effect that performs it (effects stay data until the host runs them).
     let hostEffect (effect: SaveEffect) : HostEffect =
         match effect with
         | Send request -> Http request
         | ScheduleReconcileRead(id, ms) -> Timer(ReconcileTimer id, ms)
         | Announce(politeness, text) -> LiveAnnounce(politeness, text)
-        | ExportCommands commands ->
-            let ids = commands |> List.map (fun c -> "\"" + c.CommandId.ToString "D" + "\"") |> String.concat ","
-            Download("causa-unsaved-commands.json", "{\"commands\":[" + ids + "]}")
+        | ExportCommands commands -> Download("causa-unsaved-commands.json", exportJson commands)
 
-    let private requestContext (model: Model) (context: ConnectionContext) : RequestContext =
+    /// T-S53 / review F-04: whether an investigation other than `id` has a mutation in flight in this tab, computed
+    /// from the sessions' outstanding requests (one createCommitOnBranch at a time per tab).
+    let mutationInFlightElsewhere (model: Model) (id: InvestigationId) =
+        model.Sessions
+        |> Map.exists (fun other s ->
+            other <> id
+            && (match s.Outstanding with
+                | Some(_, MutationAnswer) -> true
+                | _ -> false))
+
+    let private requestContext (model: Model) (id: InvestigationId) (context: ConnectionContext) : RequestContext =
         { Connection = context
           NextId = model.NextRequestId
-          MutationInFlightElsewhere = false }
+          MutationInFlightElsewhere = mutationInFlightElsewhere model id }
 
     let private advance (RequestId n) = RequestId(n + 1L)
 
     /// T-W01 / T-W02: a network transition sends WentOffline / WentOnline to every investigation's SM-SAVE. An
-    /// illegal network pair fails closed (state unchanged, no effect). A session whose step faults keeps its state.
-    let network (machine: SaveMachine) (input: NetworkInput) (model: Model) : Result<Model * HostEffect list, SaveFault> =
+    /// illegal network pair fails closed (state unchanged, no effect). A session whose step faults keeps its state,
+    /// and the fault is returned with its investigation (review F-05: never dropped silently).
+    let network
+        (machine: SaveMachine)
+        (input: NetworkInput)
+        (model: Model)
+        : Result<Model * HostEffect list * (InvestigationId * SaveFault) list, SaveFault> =
         NetworkMachine.step model.Network input
         |> Result.map (fun (network, saveInput) ->
-            let folded =
-                model.Sessions
-                |> Map.fold
-                    (fun (current: Model, effects) id session ->
-                        match current.Context with
-                        | None -> current, effects
-                        | Some context ->
-                            match machine.Step (requestContext current context) session saveInput with
-                            | Ok(next, saveEffects) ->
-                                let sent = saveEffects |> List.exists (function Send _ -> true | _ -> false)
+            model.Sessions
+            |> Map.fold
+                (fun (current: Model, effects, faults) id session ->
+                    match current.Context with
+                    | None -> current, effects, faults
+                    | Some context ->
+                        match machine.Step (requestContext current id context) session saveInput with
+                        | Ok(next, saveEffects) ->
+                            let sent = saveEffects |> List.exists (function Send _ -> true | _ -> false)
 
-                                { current with
-                                    Sessions = Map.add id next current.Sessions
-                                    NextRequestId = if sent then advance current.NextRequestId else current.NextRequestId },
-                                effects @ (saveEffects |> List.map hostEffect)
-                            | Error _ -> current, effects)
-                    ({ model with Network = network }, [])
-
-            folded)
+                            { current with
+                                Sessions = Map.add id next current.Sessions
+                                NextRequestId = if sent then advance current.NextRequestId else current.NextRequestId },
+                            effects @ (saveEffects |> List.map hostEffect),
+                            faults
+                        | Error fault -> current, effects, faults @ [ id, fault ])
+                ({ model with Network = network }, [], []))
 
     /// One SM-CONNECTION step on the model: the context is kept on Connect, the credential replaced on Reconnect and
     /// dropped (with the tab state) on Disconnect. Illegal pairs fail closed.
@@ -205,13 +238,7 @@ module AppEngine =
         |> Option.map (fun connection ->
             { Connection = connection
               NextId = model.NextRequestId
-              MutationInFlightElsewhere =
-                model.Sessions
-                |> Map.exists (fun other s ->
-                    other <> id
-                    && (match s.Outstanding with
-                        | Some(_, MutationAnswer) -> true
-                        | _ -> false)) })
+              MutationInFlightElsewhere = Update.mutationInFlightElsewhere model id })
 
     let private sends (effects: SaveEffect list) =
         effects |> List.exists (function Send _ -> true | _ -> false)
