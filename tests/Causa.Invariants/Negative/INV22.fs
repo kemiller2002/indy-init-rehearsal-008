@@ -123,19 +123,39 @@ module INV22 =
         @ (matrixForms |> List.map (fun f -> f, expectedFor f.Class))
         @ (rateMessageWithoutHeaders |> List.map (fun f -> f, Some notPermission))
 
+    /// Forms whose class depends on what was asked (review T35 R-01, R-03, R-06): every 404 meaning per context, a
+    /// rate-limit message without the header evidence, a read without content, STALE_DATA outside a mutation.
+    let private contextual: (string * ErrorMatrix.AnswerContext * HttpOutcome * Expected) list =
+        let notFound = Answered(id, 404, [], """{"message":"Not Found"}""")
+        let expected = CommitOid oidA
+
+        [ "GH-PERMISSION 404 on Connect", ErrorMatrix.ConnectRepository, notFound, Refused(function PermissionDenied _ -> true | _ -> false)
+          "GH-NOT-FOUND 404 on a read", ErrorMatrix.Read "rest:contents", notFound, Refused(function NotFound _ -> true | _ -> false)
+          "GH-HISTORY-REWRITTEN 404 on compare", ErrorMatrix.Compare expected, notFound, Refused(function HistoryRewritten _ -> true | _ -> false)
+          "GH-NOT-FOUND 404 on the mutation endpoint", ErrorMatrix.Mutation expected, notFound, Refused(function NotFound _ -> true | _ -> false)
+          "GH-RATE 403 rate-limit message without headers (R-03)",
+          ErrorMatrix.Read "rest:ref",
+          Answered(id, 403, [], """{"message":"API rate limit exceeded for user ID 1."}"""),
+          Refused(function RateLimited _ -> true | _ -> false)
+          "GH-MALFORMED read without content (R-06)",
+          ErrorMatrix.Read "rest:contents",
+          Answered(id, 200, [], "{}"),
+          Refused(function Malformed _ -> true | _ -> false)
+          "STALE_DATA outside a mutation invents no head (R-06)",
+          ErrorMatrix.Read "graphql",
+          Answered(id, 200, [], graphqlError "STALE_DATA" "stale"),
+          Refused(function StaleHead _ -> false | _ -> true) ]
+
     [<Fact>]
     let RecordedGitHubAnswerForms () =
-        // R-01 (T35): the matrix needs the request's context. The frozen Classifier has none, and Bindings.classifier
-        // is changing shape to take one (persistence, T19). Until it does, every context gets the one bound classifier,
-        // so the 404 forms that the context separates fail here: that is R-01 still open, not a weakened test. When the
-        // binding takes the context, this one line becomes `let classifyIn = Require.classifier ()`.
-        let classifyIn (_: ErrorMatrix.AnswerContext) : Classifier = Require.classifier ()
+        // R-01 (T35): the binding takes the request's answer context (T19), so every form is classified in its own context.
+        let classifyIn = Require.classifier ()
 
         Assert.NotEmpty(Recordings.all)
 
         let wrong =
-            forms
-            |> List.choose (fun (form, expected) ->
+            (forms
+             |> List.choose (fun (form, expected) ->
                 match contextOf form.Operation, expected with
                 | None, _ -> Some(sprintf "%s: operation '%s' has no answer context in this test" form.Name form.Operation)
                 | _, None -> Some(sprintf "%s: matrix class '%s' is not known to this test" form.Name form.Class)
@@ -143,6 +163,12 @@ module INV22 =
                     match (classifyIn context) form.Outcome, expected with
                     | Error e, Refused matches when matches e -> None
                     | Ok answer, Answer when answer.Request = id -> None
-                    | actual, _ -> Some(sprintf "%s (%s, %A) classified as %A" form.Name form.Class context actual))
+                    | actual, _ -> Some(sprintf "%s (%s, %A) classified as %A" form.Name form.Class context actual)))
+            @ (contextual
+               |> List.choose (fun (name, context, outcome, expected) ->
+                   match (classifyIn context) outcome, expected with
+                   | Error e, Refused matches when matches e -> None
+                   | Ok answer, Answer when answer.Request = id -> None
+                   | actual, _ -> Some(sprintf "%s classified as %A" name actual)))
 
         Assert.True(List.isEmpty wrong, String.concat "\n" wrong)
