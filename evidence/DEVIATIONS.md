@@ -21,3 +21,12 @@ DEV-R8-01..03: see evidence/T0-START.json (pre-existing repository; no `conditor
 
 ## GitHub Pages
 - The owner enabled Pages (source: GitHub Actions) and set DEPLOY_TARGET=github-pages on 2026-11-01 (~17:50Z), after the session proxy refused those settings to the agent.
+
+## DEV-R8-06 — invariant suite runs as a ratchet until T31
+- Context: T12 wrote the invariant tests first (PR #6). 27 of 35 fail by design until the kernel (T13), the persistence machine and codec (T19/T20), ui projections and web/causa.css bind their implementations (tests/Causa.Invariants/Model/INV08.fs `Bindings`).
+- Decision (coordinator, integration duty 3): ci.yml runs the invariant suite in its own step on every PR and push and publishes the pass/fail counts. That step is outside the merge gate until the release candidate. Merge rule: a PR may not raise the invariant failure count. T31 requires every invariant to pass. No test is skipped, filtered out of that step or weakened. The gated non-live run excludes only the Causa.Invariants namespace, which the ratchet step runs.
+
+## DEV-R8-07 — Praxis 3.24.0 step identity after transcript ingest
+- Defect: `praxis step begin` records the step's actor.model as "unknown" and identity.model/runtimeVersion as null. `praxis telemetry ingest` later fills them in on the execution but not on its steps. `praxis validate` then fails ("step ... identity.model does not match its execution"), and its own REPAIR line says to correct the named file and field.
+- Handling: the coordinator applied that repair. It copied only identity.model, identity.runtimeVersion and actor.model from the execution to the mismatched step, using a printed, field-limited script. Affected branches: r8/t14 (the T14 agent did it by hand in fcfc78e), r8/t18 (by the agent), r8/t11 (e053b53, coordinator) and r8/t12 (3a8802e, coordinator). From 18:07Z, agents use no `praxis step` commands. Step-level token attribution is therefore unavailable, which the token report shows as `(outside any step)`.
+- WI-R8-T11's agent resolved a `.ros` merge conflict with a union script after `praxis work history merge` refused ("divergent identity actor"). `praxis validate` passed afterwards. T11 also discarded its uncommitted 17:43 begin/step events and began again at 17:52, so its execution under-reports 17:43–17:52.
