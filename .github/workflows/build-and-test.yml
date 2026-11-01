@@ -158,7 +158,7 @@ jobs:
             | sudo tee /etc/apt/apt.conf.d/99-bounded-network > /dev/null
           timeout 420 npx playwright install --with-deps webkit
       - name: Integration checkpoint and acceptance specs in WebKit
-        run: npx playwright test --project=webkit tests/browser/contract/legal-command-integration.spec.js tests/browser/acceptance
+        run: npx playwright test --project=webkit tests/browser/contract/legal-command-integration.spec.js tests/browser/acceptance tests/browser/invariants
       - name: Upload WebKit traces on failure
         if: failure()
         uses: actions/upload-artifact@v4
