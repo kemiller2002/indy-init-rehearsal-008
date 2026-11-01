@@ -53,7 +53,11 @@
             <span class="ef-site-header__name">Causa</span>
           </a>
         </div>
-        <p class="causa-sync">Sync: <span class="ef-status-lozenge" data-state="unknown" data-text="syncLabel">Not connected</span></p>
+        <p class="causa-sync">Sync: <span class="ef-status-lozenge" data-state="unknown" data-text="headerConnection" data-causa-connection>Not connected</span></p>
+        <p class="causa-header-summary" data-causa-header-offline data-bind-hidden="headerOfflineHidden" data-text="headerOfflineText" hidden></p>
+        <p class="causa-header-summary" data-causa-header-unsaved data-bind-hidden="headerNotSavedHidden" hidden>
+          <a data-bind-href="headerNotSavedHref" href="#/" data-text="headerNotSavedText"></a>
+        </p>
         <p class="ef-visually-hidden" role="status" data-text="status">Loading Causa</p>
       </div>
     </header>
@@ -100,19 +104,74 @@
                it. Every region below reads the same projection (data-projection-version, ADRP-004). -->
           <section class="causa-workspace" aria-labelledby="causa-workspace-heading" data-causa-workspace>
             <h3 id="causa-workspace-heading">Investigation in this tab</h3>
+            <!-- WI-R8-T22: the save-state indicator (PERSIST-030/031): Forma status lozenge (state named in text, glyph),
+                 operation status (explanation and actions), freshness (commit time of the last confirmed save). -->
+            <div class="ef-operation-status causa-save-indicator" data-causa-save-indicator data-bind-hidden="saveIndicatorHidden" hidden>
+              <span class="ef-operation-status__symbol" aria-hidden="true" data-text="saveStateGlyph"></span>
+              <p><span class="ef-status-lozenge" data-bind-data-state="saveStateLozenge" data-causa-save-state data-text="saveStateLabel"></span>
+                <span data-causa-save-text data-text="saveStateText"></span></p>
+              <p class="ef-freshness" data-bind-hidden="saveFreshnessHidden" hidden><span class="ef-freshness__label">Last confirmed save</span>
+                <time data-bind-datetime="saveFreshnessDateTime" data-text="saveFreshnessText"></time></p>
+              <div class="ef-operation-status__actions">
+                <ef-button data-bind-hidden="saveActionSaveHidden" hidden><button type="button" data-event="save.Save">Save</button></ef-button>
+                <ef-button data-bind-hidden="saveActionRetryHidden" hidden><button type="button" data-event="save.Retry">Retry</button></ef-button>
+                <ef-button data-bind-hidden="saveActionReconnectHidden" hidden><button type="button" data-event="save.Reconnect">Reconnect</button></ef-button>
+                <ef-button data-bind-hidden="saveActionCheckAgainHidden" hidden><button type="button" data-event="save.CheckAgain">Check again</button></ef-button>
+                <ef-button data-bind-hidden="saveActionReviewHidden" hidden><button type="button" data-event="save.Review">Review</button></ef-button>
+                <ef-button data-bind-hidden="saveActionReapplyMineHidden" hidden><button type="button" data-event="save.ReapplyMine">Reapply my changes</button></ef-button>
+                <ef-button data-bind-hidden="saveActionDiscardMineHidden" hidden><button type="button" data-event="save.DiscardMine">Discard my changes</button></ef-button>
+                <ef-button data-bind-hidden="saveActionExportMineHidden" hidden><button type="button" data-event="save.ExportMine">Export my changes</button></ef-button>
+              </div>
+            </div>
+            <p class="ef-visually-hidden" role="status" aria-live="polite" data-causa-save-polite data-text="saveStatePoliteText"></p>
+            <p class="ef-visually-hidden" role="alert" aria-live="assertive" data-causa-save-assertive data-text="saveStateAssertiveText"></p>
             <p class="causa-unsaved">Not saved. This investigation exists only in this tab until a repository is connected.</p>
             <dl class="causa-projection" data-causa-region="summary" data-bind-data-projection-version="projectionVersion">
               <div><dt>State</dt><dd data-text="investigationLifecycle" data-causa-lifecycle>No investigation</dd></div>
               <div><dt>Version</dt><dd data-text="projectionVersion" data-causa-version>0</dd></div>
               <div><dt>Observations</dt><dd data-text="observationCount">0</dd></div>
+              <div><dt>Hypotheses</dt><dd data-text="hypothesisCount">0</dd></div>
               <div><dt>Conclusions</dt><dd data-text="conclusionCount">0</dd></div>
+              <div><dt>Last change</dt><dd data-text="lastChange" data-causa-last-change>No change yet.</dd></div>
             </dl>
-            <p class="causa-timeline-summary" data-causa-region="timeline" data-bind-data-projection-version="projectionVersion">
+            <p class="causa-timeline-summary" data-causa-region="timeline" data-bind-data-projection-version="projectionVersion" data-bind-hidden="regionTimelineHidden">
               Timeline: <span data-text="timelineCount" data-causa-timeline-count>0</span> events; latest
               <span data-text="timelineLatest" data-causa-timeline-latest>No events</span>.
+              <span data-text="timelineList" data-causa-timeline-list></span>
             </p>
             <p class="causa-outcome" role="status" aria-live="polite" data-causa-outcome data-bind-data-outcome="outcomeState" data-text="outcomeText">No command sent yet.</p>
             <p role="alert" data-bind-hidden="projectionFaultHidden" data-text="projectionFault" hidden></p>
+            <section aria-labelledby="causa-observations-heading" data-causa-region="observations" data-bind-data-projection-version="projectionVersion" data-bind-hidden="regionObservationsHidden">
+              <h4 id="causa-observations-heading">Observations</h4>
+              <p data-text="observationList" data-causa-observation-list>No observation recorded yet.</p>
+            </section>
+            <section aria-labelledby="causa-hypotheses-heading" data-causa-region="hypotheses" data-bind-data-projection-version="projectionVersion" data-bind-hidden="regionHypothesesHidden">
+              <h4 id="causa-hypotheses-heading">Hypotheses</h4>
+              <p data-text="hypothesisList" data-causa-hypothesis-list>No hypothesis recorded yet.</p>
+            </section>
+            <section aria-labelledby="causa-evidence-heading" data-causa-region="evidence" data-bind-data-projection-version="projectionVersion" data-bind-hidden="regionEvidenceHidden">
+              <h4 id="causa-evidence-heading">Evidence</h4>
+              <p data-text="evidenceList" data-causa-evidence-list>No evidence recorded yet.</p>
+            </section>
+            <section aria-labelledby="causa-conclusions-heading" data-causa-region="conclusions" data-bind-data-projection-version="projectionVersion" data-bind-hidden="regionConclusionsHidden">
+              <h4 id="causa-conclusions-heading">Conclusions</h4>
+              <p data-text="conclusionList" data-causa-conclusion-list>No conclusion recorded yet.</p>
+              <p data-text="conclusionReview" data-causa-conclusion-review></p>
+            </section>
+            <section aria-labelledby="causa-blockers-heading" data-causa-region="blockers" data-bind-data-projection-version="projectionVersion" data-bind-hidden="regionBlockersHidden">
+              <h4 id="causa-blockers-heading">Blockers and next actions</h4>
+              <p>Blockers: <span data-text="blockerCount" data-causa-blocker-count>0</span>. <span data-text="blockerList"></span></p>
+              <p>Next: <span data-text="nextActions" data-causa-next-actions></span></p>
+            </section>
+            <aside aria-labelledby="causa-inspector-heading" data-causa-region="inspector" data-bind-data-projection-version="projectionVersion" data-bind-hidden="inspectorHidden" hidden>
+              <h4 id="causa-inspector-heading">Latest change</h4>
+              <dl>
+                <div><dt>Event</dt><dd data-text="inspectorKind" data-causa-inspector-kind></dd></div>
+                <div><dt>Version</dt><dd data-text="inspectorVersion"></dd></div>
+                <div><dt>Caused by</dt><dd data-text="inspectorCause"></dd></div>
+                <div><dt>Event id</dt><dd data-text="inspectorEventId"></dd></div>
+              </dl>
+            </aside>
             <ul class="causa-commands" data-causa-region="capabilities" data-bind-data-projection-version="projectionVersion">
               <li><ef-button><button type="button" data-event="submit.StartInvestigation">Start investigation</button></ef-button>
                 <span class="causa-capability" data-causa-capability="StartInvestigation" data-text="capabilityStartInvestigation"></span></li>
@@ -120,6 +179,8 @@
                 <span class="causa-capability" data-causa-capability="RecordObservation" data-text="capabilityRecordObservation"></span></li>
               <li><ef-button><button type="button" data-event="submit.ActivateInvestigation">Activate</button></ef-button>
                 <span class="causa-capability" data-causa-capability="ActivateInvestigation" data-text="capabilityActivateInvestigation"></span></li>
+              <li><ef-button><button type="button" data-event="submit.RecordHypothesis">Record a hypothesis</button></ef-button>
+                <span class="causa-capability" data-causa-capability="RecordHypothesis" data-text="capabilityRecordHypothesis"></span></li>
               <li><ef-button><button type="button" data-event="submit.RecordConclusion">Record a conclusion</button></ef-button>
                 <span class="causa-capability" data-causa-capability="RecordConclusion" data-text="capabilityRecordConclusion"></span></li>
               <li><ef-button><button type="button" data-event="submit.ResolveInvestigation">Resolve</button></ef-button>
@@ -145,6 +206,21 @@
               <ul class="causa-graph-list" data-causa-graph-nodes aria-labelledby="causa-graph-nodes-heading">
                 <template data-each="graphNodes" data-key="key"><li><span data-text="label"></span> (<span data-text="role"></span>): <span data-text="provenance"></span></li></template>
               </ul>
+            </section>
+            <!-- WI-R8-T22: S23 conflict review (Forma conflict review), shown only when SM-SAVE is in Conflict. -->
+            <section class="ef-conflict-review" aria-labelledby="causa-conflict-heading" data-causa-conflict-review data-bind-hidden="conflictReviewHidden" hidden>
+              <header class="ef-conflict-review__header"><h4 id="causa-conflict-heading">Conflict with GitHub</h4></header>
+              <p data-text="conflictExplanation"></p>
+              <p data-text="conflictThisTab"></p>
+              <p data-text="conflictRemote"></p>
+              <p data-text="conflictStage"></p>
+              <p data-text="conflictRefused"></p>
+              <div class="ef-conflict-review__actions">
+                <ef-button data-bind-hidden="conflictReapplyHidden" hidden><button type="button" data-event="conflict.Reapply">Reapply my changes</button></ef-button>
+                <ef-button data-bind-hidden="conflictDiscardHidden" hidden><button type="button" data-event="conflict.Discard">Discard my changes</button></ef-button>
+                <ef-button data-bind-hidden="conflictExportHidden" hidden><button type="button" data-event="conflict.Export">Export my changes</button></ef-button>
+                <ef-button data-bind-hidden="conflictRetryHidden" hidden><button type="button" data-event="conflict.Retry">Read GitHub again</button></ef-button>
+              </div>
             </section>
           </section>
         </section>
