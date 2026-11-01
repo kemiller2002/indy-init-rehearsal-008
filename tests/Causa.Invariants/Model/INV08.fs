@@ -25,7 +25,7 @@ type FakeGitHub =
 /// RED BY DESIGN message: an unbound implementation is never treated as a pass and no test is skipped.
 module Bindings =
     /// The F# kernel (IF41-DOMAIN), T13 (domain).
-    let kernel: DomainKernel option = None
+    let kernel: DomainKernel option = Some Kernel.domain
     /// SM-SAVE, SM-CONFLICT and SM-LOAD (IF41-SAVE), persistence.
     let saveMachine: SaveMachine option = None
     /// causa-storage v1.0.0 codec (IF41-STORAGE), persistence.
