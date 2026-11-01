@@ -27,9 +27,32 @@ module Report =
 
     let private eventText (EventId id) = guidText id
 
-    let private kindOf (envelope: EventEnvelope) =
+    /// An event in the words a person reads (UI-024-O5); its kind stays as data only.
+    let eventSentence (event: DomainEvent) =
+        match event with
+        | InvestigationStarted -> "Investigation started"
+        | InvestigationRenamed -> "Investigation renamed"
+        | InvestigationActivated -> "Investigation activated"
+        | InvestigationMarkedAwaitingEvidence -> "Marked awaiting evidence"
+        | InvestigationMarkedAwaitingVerification -> "Marked awaiting verification"
+        | InvestigationResolved -> "Investigation resolved"
+        | InvestigationClosed -> "Investigation closed"
+        | InvestigationReopened -> "Investigation reopened"
+        | InvestigationArchived -> "Investigation archived"
+        | ObservationRecorded -> "Observation recorded"
+        | HypothesisRecorded -> "Hypothesis recorded"
+        | ConclusionRecorded -> "Conclusion recorded"
+
+    /// The event's kind (data only, e.g. the chronology row's "code").
+    let private codeOf (envelope: EventEnvelope) =
         let (EventPayload kind) = envelope.Payload
         kind
+
+    /// The event in words: its sentence, or a plain statement when this version does not know the kind.
+    let private kindOf (envelope: EventEnvelope) =
+        DomainEvent.ofPayload envelope.Payload
+        |> Option.map eventSentence
+        |> Option.defaultValue "An event this version of Causa does not describe"
 
     let kindOfLifecycle (lifecycle: InvestigationLifecycle) : ReportKind =
         match lifecycle with
@@ -82,7 +105,7 @@ module Report =
         let detail =
             match entries with
             | [] -> []
-            | _ -> [ $"Recorded as {provenanceSentence entries}. The kernel records that each was made, not its wording." ]
+            | _ -> [ $"Recorded: {provenanceSentence entries}. The kernel records that each was made, not its wording." ]
         section heading (count :: detail) (entries |> List.map _.EventId)
 
     let private sourceSection (state: InvestigationState) (history: EventEnvelope list) =
@@ -158,8 +181,8 @@ module Report =
         | Error error ->
             { Investigation = projection.Investigation.Id
               Version = projection.Investigation.Version
-              Sections = [ section "Report unavailable" [ $"The history does not replay ({error}); the report states nothing from it." ] [] ]
-              UnresolvedUncertainties = [ "The investigation's history could not be replayed." ] }
+              Sections = [ section "Report unavailable" [ $"The history cannot be read in order ({error}); the report states nothing from it." ] [] ]
+              UnresolvedUncertainties = [ "The investigation's history could not be read in order." ] }
 
     /// IF41-REPORT (Boundary E): the report projection Folio renders.
     let reporting: Reporting = { Project = project }
@@ -182,6 +205,7 @@ module Report =
         [ "key", eventText e.EventId
           "version", string (versionOf e.Version)
           "kind", kindOf e
+          "code", codeOf e
           "event", eventText e.EventId ]
 
     let private unresolvedRow (index: int) (text: string) : Graph.Row =
