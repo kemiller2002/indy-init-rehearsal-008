@@ -219,7 +219,8 @@ module StatefulFake =
 
             let files = JsonArray()
 
-            for p in changed do
+            // GitHub lists at most 300 changed files for the whole comparison, with no truncation flag (review T36 F-01).
+            for p in changed |> Seq.truncate 300 do
                 let f = JsonObject()
                 f["filename"] <- JsonValue.Create p
                 files.Add f
