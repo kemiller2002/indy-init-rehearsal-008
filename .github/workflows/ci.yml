@@ -45,6 +45,13 @@ jobs:
           set -euo pipefail
           npm ci --no-audit --no-fund
 
+      # CR-T15-01: the frozen Causa storage v1 dataset (public), read-only, for FrozenFixturesReplay.
+      - uses: actions/checkout@v4
+        with:
+          repository: kemiller2002/causa-data
+          ref: causa-storage-v1.0.0
+          path: causa-data
+
       - name: Build Causa.slnx (warnings are errors)
         run: |
           set -euo pipefail
@@ -59,6 +66,7 @@ jobs:
       - name: Test Causa.slnx (non-live suites)
         run: |
           set -uo pipefail
+          export CAUSA_DATA_ROOT="$GITHUB_WORKSPACE/causa-data"
           output=$(dotnet test Causa.slnx -c Release --no-build --filter "FullyQualifiedName!~.Live.&FullyQualifiedName!~Causa.Invariants." --logger trx --results-directory TestResults 2>&1)
           status=$?
           echo "$output"
