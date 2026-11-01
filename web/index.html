@@ -100,6 +100,31 @@
         <section aria-labelledby="causa-start-heading" data-bind-hidden="screenInvestigationStartHidden" hidden>
           <h2 id="causa-start-heading">New investigation</h2>
           <p>Connect a repository to save a new investigation.</p>
+          <!-- WI-R8-T22B (CR-T22B-2): Connect, open and create through the engine (IF41-APP). The token is sent to the
+               engine once, kept only in this tab's memory and never bound back into the page, logged or stored. -->
+          <section class="causa-connect" aria-labelledby="causa-connect-heading" data-causa-connect>
+            <h3 id="causa-connect-heading">GitHub repository</h3>
+            <p role="status" data-causa-connection data-text="connectionStatus">Not connected</p>
+            <form data-causa-connect-form data-event="connect.submit" data-bind-hidden="connectFormHidden" autocomplete="off">
+              <label>Owner <input name="owner" data-event="connect.owner" required></label>
+              <label>Repository <input name="repository" data-event="connect.repository" required></label>
+              <label>Branch <input name="branch" value="main" data-event="connect.branch"></label>
+              <label>Token <input name="token" type="password" data-event="connect.token" autocomplete="off" required></label>
+              <ef-button><button type="submit">Connect</button></ef-button>
+            </form>
+            <form data-causa-reconnect-form data-event="reconnect.submit" data-bind-hidden="reconnectFormHidden" hidden autocomplete="off">
+              <label>New token <input name="token" type="password" data-event="connect.token" autocomplete="off" required></label>
+              <ef-button><button type="submit">Reconnect</button></ef-button>
+            </form>
+            <div data-causa-investigation-form data-bind-hidden="investigationFormHidden" hidden>
+              <label>Investigation identifier <input name="investigation" data-event="investigation.id"></label>
+              <ef-button><button type="button" data-event="investigation.open">Open</button></ef-button>
+              <ef-button><button type="button" data-event="investigation.create">Create</button></ef-button>
+              <ef-button><button type="button" data-event="connect.disconnect">Disconnect</button></ef-button>
+            </div>
+            <p data-causa-investigation-notice data-text="investigationNotice"></p>
+            <p class="ef-visually-hidden" role="status" aria-live="polite" data-causa-live data-text="liveAnnouncement"></p>
+          </section>
           <!-- WI-R8-T17: each button sends a typed command through Limen to the F# engine; the domain kernel decides
                it. Every region below reads the same projection (data-projection-version, ADRP-004). -->
           <section class="causa-workspace" aria-labelledby="causa-workspace-heading" data-causa-workspace>
@@ -220,6 +245,8 @@
                 <ef-button data-bind-hidden="conflictDiscardHidden" hidden><button type="button" data-event="conflict.Discard">Discard my changes</button></ef-button>
                 <ef-button data-bind-hidden="conflictExportHidden" hidden><button type="button" data-event="conflict.Export">Export my changes</button></ef-button>
                 <ef-button data-bind-hidden="conflictRetryHidden" hidden><button type="button" data-event="conflict.Retry">Read GitHub again</button></ef-button>
+                <ef-button data-bind-hidden="conflictConfirmDiscardHidden" hidden><button type="button" data-event="conflict.DiscardConfirm">Yes, discard my changes</button></ef-button>
+                <ef-button data-bind-hidden="conflictConfirmDiscardHidden" hidden><button type="button" data-event="conflict.DiscardCancel">Keep my changes</button></ef-button>
               </div>
             </section>
           </section>
