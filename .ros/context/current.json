@@ -2,9 +2,9 @@
   "schemaVersion": "1.0.0",
   "protocolVersion": "1.0.0",
   "repository": "indy-init-rehearsal-008",
-  "actor": "claude-code/domain",
+  "actor": "claude-code/persistence",
   "startedAt": "2026-11-01T17:31:25.465Z",
-  "updatedAt": "2026-11-01T19:00:50.332Z",
+  "updatedAt": "2026-11-01T19:07:06.393Z",
   "baselineDirtyPaths": [],
   "workItems": [
     {
@@ -195,6 +195,47 @@
         }
       },
       "completedAt": "2026-11-01T18:04:03.158Z"
+    },
+    {
+      "id": "WI-R8-T19",
+      "type": "task",
+      "state": "complete",
+      "semanticState": "complete",
+      "evidence": [
+        {
+          "type": "implementation",
+          "path": "src/Causa.Persistence/Session.fs"
+        },
+        {
+          "type": "tests",
+          "path": "tests/Causa.Persistence.Tests/StateMachines/SMSAVE.fs"
+        }
+      ],
+      "updatedAt": "2026-11-01T18:32:53.130Z",
+      "telemetryExecutionIds": [
+        "EXE-20261101T181553799Z-8990a855"
+      ],
+      "latestCheckpoint": {
+        "id": "1f7f0a893d7f2c30a70a5308",
+        "recordedAt": "2026-11-01T18:32:37.959Z",
+        "executionId": "EXE-20261101T181553799Z-8990a855",
+        "repository": "indy-init-rehearsal-008",
+        "branch": "r8/t19",
+        "commit": "303749d8654f7f607ad3aace5d345e33c1b048ae",
+        "remote": {
+          "name": "origin",
+          "url": "https://github.com/kemiller2002/indy-init-rehearsal-008"
+        },
+        "remoteBranch": "r8/t19",
+        "remoteCommit": "303749d8654f7f607ad3aace5d345e33c1b048ae",
+        "summary": "SM-SAVE/SM-CONFLICT/SM-LOAD and save process implemented; 89 state-machine tests + 7 process tests pass; persistence invariants bound (27->6 failing on t12 base); T35 R-01/03/04/05/06/11 addressed",
+        "nextAction": "integration merges PR",
+        "verification": {
+          "status": "verified",
+          "mechanism": "git-remote-observation"
+        }
+      },
+      "completedAt": "2026-11-01T18:32:53.130Z"
     },
     {
       "id": "WI-R8-T13",
@@ -402,6 +443,47 @@
       "completedAt": "2026-11-01T17:44:57.067Z"
     },
     {
+      "id": "WI-R8-T20",
+      "type": "task",
+      "state": "complete",
+      "semanticState": "complete",
+      "evidence": [
+        {
+          "type": "implementation",
+          "path": "src/Causa.Persistence/Session.fs"
+        },
+        {
+          "type": "tests",
+          "path": "tests/Causa.Acceptance/Live/PERSIST006Tests.fs"
+        }
+      ],
+      "updatedAt": "2026-11-01T18:51:17.074Z",
+      "telemetryExecutionIds": [
+        "EXE-20261101T184529489Z-e1da776e"
+      ],
+      "latestCheckpoint": {
+        "id": "ad9031c86d5054393b28167e",
+        "recordedAt": "2026-11-01T18:51:07.200Z",
+        "executionId": "EXE-20261101T184529489Z-e1da776e",
+        "repository": "indy-init-rehearsal-008",
+        "branch": "r8/t20",
+        "commit": "8cc9e47259a1c36147516c03c5706060356c0be5",
+        "remote": {
+          "name": "origin",
+          "url": "https://github.com/kemiller2002/indy-init-rehearsal-008"
+        },
+        "remoteBranch": "r8/t20",
+        "remoteCommit": "8cc9e47259a1c36147516c03c5706060356c0be5",
+        "summary": "GitHubProvider (connect, open, explicit create, large-file re-read, FileSetOf/SaveSetup API); live suites PERSIST-005/006/007/021 fake halves pass, live halves BLOCKED locally",
+        "nextAction": "integration merges PR",
+        "verification": {
+          "status": "verified",
+          "mechanism": "git-remote-observation"
+        }
+      },
+      "completedAt": "2026-11-01T18:51:17.074Z"
+    },
+    {
       "id": "WI-R8-T15",
       "type": "task",
       "state": "complete",
@@ -441,47 +523,6 @@
         }
       },
       "completedAt": "2026-11-01T18:34:46.617Z"
-    },
-    {
-      "id": "WI-R8-T15B",
-      "type": "task",
-      "state": "complete",
-      "semanticState": "complete",
-      "evidence": [
-        {
-          "type": "implementation",
-          "path": "src/Causa.Domain/Kernel.fs"
-        },
-        {
-          "type": "tests",
-          "path": "tests/Causa.Contract.Tests/Domain/Producer.fs"
-        }
-      ],
-      "updatedAt": "2026-11-01T18:49:04.881Z",
-      "telemetryExecutionIds": [
-        "EXE-20261101T184838512Z-8ab45f26"
-      ],
-      "latestCheckpoint": {
-        "id": "ffc4c55de5431248b43912d4",
-        "recordedAt": "2026-11-01T18:48:55.415Z",
-        "executionId": "EXE-20261101T184838512Z-8ab45f26",
-        "repository": "indy-init-rehearsal-008",
-        "branch": "r8/t15b",
-        "commit": "d8d91f88205c58f731232d61ae51dc10fa0a9174",
-        "remote": {
-          "name": "origin",
-          "url": "https://github.com/kemiller2002/indy-init-rehearsal-008"
-        },
-        "remoteBranch": "r8/t15b",
-        "remoteCommit": "d8d91f88205c58f731232d61ae51dc10fa0a9174",
-        "summary": "Kernel StorageV1Replay: 31-type registry, 8.3 projection, canonical digest; FrozenFixturesReplay 5/5 golden, 40/40 kernel negatives; INV11 generator non-empty",
-        "nextAction": "integration merges PR",
-        "verification": {
-          "status": "verified",
-          "mechanism": "git-remote-observation"
-        }
-      },
-      "completedAt": "2026-11-01T18:49:04.881Z"
     },
     {
       "id": "WI-R8-T16",
@@ -566,7 +607,7 @@
       "completedAt": "2026-11-01T18:35:17.130Z"
     },
     {
-      "id": "WI-R8-T19",
+      "id": "WI-R8-T25",
       "type": "task",
       "state": "complete",
       "semanticState": "complete",
@@ -577,75 +618,79 @@
         },
         {
           "type": "tests",
-          "path": "tests/Causa.Persistence.Tests/StateMachines/SMSAVE.fs"
+          "path": "tests/Causa.Acceptance/Live/EXTDATA013Tests.fs"
+        },
+        {
+          "type": "tests",
+          "path": "tests/Causa.Contract.Tests/Storage/ConsumerPersistence.fs"
         }
       ],
-      "updatedAt": "2026-11-01T18:32:53.130Z",
+      "updatedAt": "2026-11-01T19:07:06.393Z",
       "telemetryExecutionIds": [
-        "EXE-20261101T181553799Z-8990a855"
+        "EXE-20261101T185636769Z-1c835ed5"
       ],
       "latestCheckpoint": {
-        "id": "1f7f0a893d7f2c30a70a5308",
-        "recordedAt": "2026-11-01T18:32:37.959Z",
-        "executionId": "EXE-20261101T181553799Z-8990a855",
+        "id": "3d856d8bacc635cad2bbe344",
+        "recordedAt": "2026-11-01T19:06:48.899Z",
+        "executionId": "EXE-20261101T185636769Z-1c835ed5",
         "repository": "indy-init-rehearsal-008",
-        "branch": "r8/t19",
-        "commit": "303749d8654f7f607ad3aace5d345e33c1b048ae",
+        "branch": "r8/t25",
+        "commit": "32fd5a7e5ad4a84af73af2d72b6ac88edeaf070a",
         "remote": {
           "name": "origin",
           "url": "https://github.com/kemiller2002/indy-init-rehearsal-008"
         },
-        "remoteBranch": "r8/t19",
-        "remoteCommit": "303749d8654f7f607ad3aace5d345e33c1b048ae",
-        "summary": "SM-SAVE/SM-CONFLICT/SM-LOAD and save process implemented; 89 state-machine tests + 7 process tests pass; persistence invariants bound (27->6 failing on t12 base); T35 R-01/03/04/05/06/11 addressed",
+        "remoteBranch": "r8/t25",
+        "remoteCommit": "32fd5a7e5ad4a84af73af2d72b6ac88edeaf070a",
+        "summary": "HistoricalCatalog load after Connect (requests as data, per-case verify+StorageV1Replay, fail closed per item); EXT-DATA-013 O1-O3 live tests (CI); CatalogCasesVerifyAndReplay passes locally",
         "nextAction": "integration merges PR",
         "verification": {
           "status": "verified",
           "mechanism": "git-remote-observation"
         }
       },
-      "completedAt": "2026-11-01T18:32:53.130Z"
+      "completedAt": "2026-11-01T19:07:06.393Z"
     },
     {
-      "id": "WI-R8-T20",
+      "id": "WI-R8-T15B",
       "type": "task",
       "state": "complete",
       "semanticState": "complete",
       "evidence": [
         {
           "type": "implementation",
-          "path": "src/Causa.Persistence/Session.fs"
+          "path": "src/Causa.Domain/Kernel.fs"
         },
         {
           "type": "tests",
-          "path": "tests/Causa.Acceptance/Live/PERSIST006Tests.fs"
+          "path": "tests/Causa.Contract.Tests/Domain/Producer.fs"
         }
       ],
-      "updatedAt": "2026-11-01T18:51:17.074Z",
+      "updatedAt": "2026-11-01T18:49:04.881Z",
       "telemetryExecutionIds": [
-        "EXE-20261101T184529489Z-e1da776e"
+        "EXE-20261101T184838512Z-8ab45f26"
       ],
       "latestCheckpoint": {
-        "id": "ad9031c86d5054393b28167e",
-        "recordedAt": "2026-11-01T18:51:07.200Z",
-        "executionId": "EXE-20261101T184529489Z-e1da776e",
+        "id": "ffc4c55de5431248b43912d4",
+        "recordedAt": "2026-11-01T18:48:55.415Z",
+        "executionId": "EXE-20261101T184838512Z-8ab45f26",
         "repository": "indy-init-rehearsal-008",
-        "branch": "r8/t20",
-        "commit": "8cc9e47259a1c36147516c03c5706060356c0be5",
+        "branch": "r8/t15b",
+        "commit": "d8d91f88205c58f731232d61ae51dc10fa0a9174",
         "remote": {
           "name": "origin",
           "url": "https://github.com/kemiller2002/indy-init-rehearsal-008"
         },
-        "remoteBranch": "r8/t20",
-        "remoteCommit": "8cc9e47259a1c36147516c03c5706060356c0be5",
-        "summary": "GitHubProvider (connect, open, explicit create, large-file re-read, FileSetOf/SaveSetup API); live suites PERSIST-005/006/007/021 fake halves pass, live halves BLOCKED locally",
+        "remoteBranch": "r8/t15b",
+        "remoteCommit": "d8d91f88205c58f731232d61ae51dc10fa0a9174",
+        "summary": "Kernel StorageV1Replay: 31-type registry, 8.3 projection, canonical digest; FrozenFixturesReplay 5/5 golden, 40/40 kernel negatives; INV11 generator non-empty",
         "nextAction": "integration merges PR",
         "verification": {
           "status": "verified",
           "mechanism": "git-remote-observation"
         }
       },
-      "completedAt": "2026-11-01T18:51:17.074Z"
+      "completedAt": "2026-11-01T18:49:04.881Z"
     },
     {
       "id": "WI-R8-T17",
