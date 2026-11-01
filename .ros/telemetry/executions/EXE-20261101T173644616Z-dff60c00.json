@@ -52,14 +52,20 @@
         "type": "ros-git",
         "name": "git",
         "mechanism": "repository-baseline"
+      },
+      {
+        "type": "runtime-output",
+        "name": "generic-telemetry-envelope",
+        "mechanism": "json"
       }
     ]
   },
   "classification": {
     "types": [
-      "coordinator"
+      "x-role-coordinator",
+      "administrative-process"
     ],
-    "rationale": null,
+    "rationale": "coordinator lane (role attribution for token economics)",
     "evidence": [],
     "rd": null
   },
@@ -1621,7 +1627,23 @@
       "schemaVersion": "1.0.0"
     }
   ],
-  "rawTelemetry": [],
+  "rawTelemetry": [
+    {
+      "snapshotId": "classification-1793554637715",
+      "adapter": "generic",
+      "schemaVersion": null,
+      "collectedAt": "2026-11-01T17:37:17.746Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "generic-telemetry-envelope",
+        "mechanism": "json"
+      },
+      "payload": {},
+      "payloadBytes": 2,
+      "discoveredFields": [],
+      "redactions": []
+    }
+  ],
   "events": [
     {
       "type": "execution.started",
@@ -1631,6 +1653,23 @@
         "name": "ros",
         "mechanism": "work-lifecycle"
       }
+    },
+    {
+      "type": "telemetry.snapshot.ingested",
+      "snapshotId": "classification-1793554637715",
+      "adapter": "generic",
+      "rawRetention": {
+        "status": "retained",
+        "reason": null,
+        "payloadBytes": 2
+      },
+      "occurredAt": "2026-11-01T17:37:17.746Z",
+      "source": {
+        "type": "runtime-output",
+        "name": "generic-telemetry-envelope",
+        "mechanism": "json"
+      },
+      "eventId": "TEVT-56e44ff3e584b99a7a757dd5"
     }
   ],
   "repository": {
