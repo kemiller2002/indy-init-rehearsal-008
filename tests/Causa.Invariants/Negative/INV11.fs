@@ -140,9 +140,9 @@ module INV11 =
     let private forgeSnapshotState (files: FileSet) =
         let snapshot = parse files.Snapshot
 
-        match holder "title" snapshot with
-        | Some o -> o["title"] <- JsonValue.Create("forged title " + text o "title")
-        | None -> failwith "the codec's snapshot has no title; the snapshot-equals-replay case cannot be built"
+        match holder "version" snapshot with
+        | Some o -> o["version"] <- JsonValue.Create(999L)
+        | None -> failwith "the codec's snapshot has no version; the snapshot-equals-replay case cannot be built"
 
         let bytes = serialize snapshot
 
