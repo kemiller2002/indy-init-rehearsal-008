@@ -17,7 +17,11 @@ type SaveSetup =
       /// The tab's random session identifier (PERSIST-014).
       Tab: Guid
       /// The tab's marker source (Markers.forTab Tab): a new marker for every mutation.
-      NextMarker: unit -> WriteMarker }
+      NextMarker: unit -> WriteMarker
+      /// SM-NETWORK says the tab is offline. The engine builds the machine for each update with its current network
+      /// state, so the "known offline" guards (T-S02, T-S05, T-S52, T-S55, T-S57, T-L02, T-C04, T-C13) are decided
+      /// from a value, not from an effect.
+      KnownOffline: bool }
 
 [<RequireQualifiedAccess>]
 module SaveProcess =
@@ -206,19 +210,24 @@ module SaveProcess =
     let step (setup: SaveSetup) (context: RequestContext) (session: InvestigationSession) (input: SaveInput) =
         let ok s = Ok(s, [])
         let busy = context.MutationInFlightElsewhere
+        let offline = setup.KnownOffline
+        let toOffline text = Ok(settle session SaveState.Offline, [ Announce(Assertive, text) ])
 
         match session.State, input with
         // ----- Saved
+        | SaveState.Saved _, SaveInput.Edit command when offline -> ok { append session command with State = SaveState.Offline } // T-S02
         | SaveState.Saved _, SaveInput.Edit command -> ok { append session command with State = SaveState.Unsaved } // T-S01
         | SaveState.Saved _, SaveInput.WentOffline -> ok session // T-S41
         | SaveState.Saved _, SaveInput.WentOnline -> ok session // T-S42
         // ----- Unsaved
         | SaveState.Unsaved, SaveInput.Edit command -> ok (append session command) // T-S03
+        | SaveState.Unsaved, SaveInput.SaveRequested when offline -> toOffline "Offline: nothing was sent." // T-S05
         | SaveState.Unsaved, SaveInput.SaveRequested when busy ->
             Ok(session, [ Announce(Polite, "Waiting for another save in this tab to finish.") ]) // T-S53
         | SaveState.Unsaved, SaveInput.SaveRequested -> Ok(sendMutation setup context (newRequest session) session.BaseHead) // T-S04
         | SaveState.Unsaved, SaveInput.WentOffline -> ok { session with State = SaveState.Offline; Outstanding = None } // T-S06
         | SaveState.Unsaved, SaveInput.WentOnline -> ok session // T-S43
+        | SaveState.Unsaved, SaveInput.QueuedSaveStarted when offline -> toOffline "Offline: the waiting save was not sent." // T-S55
         | SaveState.Unsaved, SaveInput.QueuedSaveStarted when not busy ->
             Ok(sendMutation setup context (newRequest session) session.BaseHead) // T-S54
         // ----- Saving
@@ -241,20 +250,21 @@ module SaveProcess =
         | SaveState.Saving, SaveInput.WentOffline -> ok session // T-S45
         | SaveState.Saving, SaveInput.WentOnline -> ok session // T-S46
         | SaveState.Saving, SaveInput.SupersededReply _ -> ok session // T-S39
+        | SaveState.Saving, SaveInput.RebaseReadFailed when offline -> toOffline "Offline: nothing of this save was written." // T-S57
         | SaveState.Saving, SaveInput.RebaseReadFailed ->
             Ok(unknown session "GitHub could not be read after a stale head. Checking what was saved.") // T-S59
         | SaveState.Saving, SaveInput.ReadBackReadFailed ->
             Ok(unknown session "The saved commit could not be re-read. Checking what was saved.") // T-S58
         // ----- Offline
         | SaveState.Offline, SaveInput.Edit command -> ok (append session command) // T-S07
-        | SaveState.Offline, SaveInput.SaveRequested -> Ok(session, [ Announce(Assertive, "Offline: nothing was sent.") ]) // T-S08
+        | SaveState.Offline, SaveInput.SaveRequested when offline -> Ok(session, [ Announce(Assertive, "Offline: nothing was sent.") ]) // T-S08
         | SaveState.Offline, SaveInput.WentOffline -> ok session // T-S44
         | SaveState.Offline, SaveInput.WentOnline -> ok { session with State = SaveState.Unsaved } // T-S09
         | SaveState.Offline, SaveInput.QueuedSaveStarted -> ok session // T-S60
         // ----- Conflict
         | SaveState.Conflict _, SaveInput.Edit command -> ok (append session command) // T-S36
         | SaveState.Conflict _, SaveInput.WentOffline -> ok session // T-S48
-        | SaveState.Conflict RemoteUnavailable, SaveInput.WentOnline ->
+        | SaveState.Conflict RemoteUnavailable, SaveInput.WentOnline when not offline ->
             Ok(
                 { session with State = SaveState.Conflict(ReadingRemote context.NextId) },
                 [ Send(ConflictMachine.readRequest context session.Id) ]
@@ -306,6 +316,7 @@ module SaveProcess =
         | SaveState.UnknownOutcome _, SaveInput.SupersededReply _ -> ok session // T-S40
         // ----- SaveFailed
         | SaveState.SaveFailed _, SaveInput.Edit command -> ok (append session command) // T-S34
+        | SaveState.SaveFailed _, SaveInput.SaveRequested when offline -> toOffline "Offline: nothing was sent." // T-S52
         | SaveState.SaveFailed _, SaveInput.SaveRequested when not busy ->
             Ok(sendMutation setup context (newRequest session) session.BaseHead) // T-S35
         | SaveState.SaveFailed _, SaveInput.WentOffline -> ok session // T-S50
@@ -316,7 +327,6 @@ module SaveProcess =
     let reconcileDue (context: RequestContext) (session: InvestigationSession) =
         match session.State, session.Outstanding with
         | SaveState.UnknownOutcome _, None -> Ok(reconcileRead context session)
-        | SaveState.UnknownOutcome _, Some _ when session.ReconcileReads >= maxAutomaticReads -> Ok(session, [])
         | SaveState.UnknownOutcome _, Some _ -> Ok(session, [])
         | _ ->
             Error
@@ -473,9 +483,9 @@ module SaveProcess =
           Step = step setup
           ReconcileDue = reconcileDue
           InterpretConflict = ConflictMachine.interpret setup.Codec
-          StepConflict = ConflictMachine.step
+          StepConflict = ConflictMachine.step setup.KnownOffline
           InterpretLoad = LoadMachine.interpret setup.Codec
-          StepLoad = LoadMachine.step }
+          StepLoad = LoadMachine.step setup.KnownOffline }
 
     /// The file set of the session's in-flight commands alone, one recorded event per command, encoded with
     /// causa-storage v1.0.0. Deterministic. It stands in until the engine supplies the base-aware FileSetOf (the
@@ -498,4 +508,5 @@ module SaveProcess =
             { Codec = StorageV1.codec
               FileSetOf = pendingCommandFiles
               Tab = tab
-              NextMarker = Markers.forTab tab }
+              NextMarker = Markers.forTab tab
+              KnownOffline = false }

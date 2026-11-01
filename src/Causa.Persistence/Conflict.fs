@@ -62,7 +62,7 @@ module ConflictMachine =
         | None -> "the investigation is missing on the branch"
         | Some f -> sprintf "the GitHub version does not verify: %A" f
 
-    let step (context: RequestContext) (view: ConflictView) (input: ConflictInput) : Result<ConflictView * SaveEffect list, SaveFault> =
+    let step (knownOffline: bool) (context: RequestContext) (view: ConflictView) (input: ConflictInput) : Result<ConflictView * SaveEffect list, SaveFault> =
         match view, input with
         // T-C01
         | ReadingRemote _, ConflictInput.RemoteVerified remote -> Ok(Reviewable remote, [])
@@ -90,8 +90,8 @@ module ConflictMachine =
         // T-C10
         | ConfirmingDiscard remote, ConflictInput.DiscardCancelled -> Ok(Reviewable remote, [])
         // T-C04, T-C13: a new request identity; the engine sends readRequest with it (see readRequest).
-        | RemoteUnavailable, ConflictInput.ReadAgain
-        | Unresolvable _, ConflictInput.ReadAgain -> Ok(ReadingRemote context.NextId, [])
+        | RemoteUnavailable, ConflictInput.ReadAgain when not knownOffline -> Ok(ReadingRemote context.NextId, [])
+        | Unresolvable _, ConflictInput.ReadAgain when not knownOffline -> Ok(ReadingRemote context.NextId, [])
         // T-C12: offer the unsaved commands as a file; nothing is written to GitHub or browser storage. The view
         // does not hold the commands, so the effect is empty and the engine fills it from the session's unsaved
         // commands (Unsaved @ AfterInFlight).

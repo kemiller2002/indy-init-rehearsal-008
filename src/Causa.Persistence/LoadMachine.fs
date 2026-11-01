@@ -39,9 +39,10 @@ module LoadMachine =
                   (StoragePaths.snapshot investigation)
           ) ]
 
-    let step (context: RequestContext) (state: LoadState) (input: LoadInput) : Result<LoadState * SaveEffect list, SaveFault> =
+    let step (knownOffline: bool) (context: RequestContext) (state: LoadState) (input: LoadInput) : Result<LoadState * SaveEffect list, SaveFault> =
         match state, input with
-        // T-L01 (online and connected: the engine steps OpenRequested only then; offline it shows T-L02's state).
+        // T-L01 (online and connected).
+        | NotLoaded, LoadInput.OpenRequested _ when knownOffline -> Ok(UnavailableOffline, []) // T-L02
         | NotLoaded, LoadInput.OpenRequested id -> Ok(open' context id)
         // T-L03
         | Loading _, LoadInput.LoadVerified verified -> Ok(Loaded verified, [])
@@ -56,7 +57,7 @@ module LoadMachine =
         // T-L07 (the engine refuses Refresh unless SM-SAVE is Saved, INV-07).
         | Loaded verified, LoadInput.RefreshRequested -> Ok(open' context verified.Investigation.Id)
         // T-L08
-        | LoadFailed _, LoadInput.OpenRequested id -> Ok(open' context id)
+        | LoadFailed _, LoadInput.OpenRequested id when not knownOffline -> Ok(open' context id)
         // T-L06
         | UnavailableOffline, LoadInput.WentOnline -> Ok(NotLoaded, [])
         | _ ->
