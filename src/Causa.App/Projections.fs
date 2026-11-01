@@ -257,3 +257,87 @@ module Projection =
         { SaveIndicator = SaveIndicatorProjection.project
           Header = HeaderProjection.header
           Screen = HeaderProjection.screen }
+
+/// UI-024-O1: the one presentation-language mapping from typed domain states and kernel refusals to the words a
+/// person reads in the workspace. Kernel codes (illegal-transition, resolution-gate, ...) and command type names
+/// (ResolveInvestigation, ...) never reach the visible text (UI-024-O5); the codes stay available as data
+/// (Blocker.Code) for Administration and for data attributes. Pure and total.
+[<RequireQualifiedAccess>]
+module PresentationLanguage =
+    let lifecycleName (lifecycle: InvestigationLifecycle) =
+        match lifecycle with
+        | Draft -> "Draft"
+        | Active -> "Active"
+        | AwaitingEvidence -> "Awaiting evidence"
+        | AwaitingVerification -> "Awaiting verification"
+        | Resolved -> "Resolved"
+        | Closed -> "Closed"
+        | Archived -> "Archived"
+
+    /// A command in the words a person reads (no state-machine vocabulary, R9.4).
+    let commandLabel (command: Command) =
+        match command with
+        | StartInvestigation -> "Start investigation"
+        | RenameInvestigation -> "Rename"
+        | ActivateInvestigation -> "Activate"
+        | MarkAwaitingEvidence -> "Mark awaiting evidence"
+        | MarkAwaitingVerification -> "Mark awaiting verification"
+        | ResolveInvestigation -> "Resolve"
+        | CloseInvestigation -> "Close"
+        | ReopenInvestigation -> "Reopen"
+        | ArchiveInvestigation -> "Archive"
+        | RecordObservation -> "Record an observation"
+        | Command.RecordHypothesis -> "Record a hypothesis"
+        | RecordConclusion -> "Record a conclusion"
+
+    /// Why a structurally illegal command cannot be taken now, from the command and the investigation's status.
+    let private notNow (command: Command) (lifecycle: InvestigationLifecycle option) =
+        match command, lifecycle with
+        | _, None -> "Start the investigation first."
+        | StartInvestigation, Some _ -> "This investigation has already been started."
+        | _, Some state -> $"{commandLabel command} is not possible while the investigation's status is {(lifecycleName state).ToLowerInvariant()}."
+
+    /// Pure: one kernel blocker as the plain-language reason a person reads (never the code or a type name). The
+    /// kernel's own policy sentences are already written for people and are kept; every other code has its words here.
+    let blockerReason (command: Command) (lifecycle: InvestigationLifecycle option) (blocker: Blocker) =
+        match blocker.Code with
+        | "illegal-transition" -> notNow command lifecycle
+        | "activation-policy"
+        | "resolution-gate"
+        | "unauthorized" -> blocker.Message
+        | "requires-review" -> $"This needs review first: {blocker.Message}"
+        | "version-conflict" -> "The investigation changed since this tab read it. Review the newer version first."
+        | "duplicate" -> "This was already done."
+        | "unsupported-semantics" -> "This investigation uses rules this version of Causa does not support."
+        | "investigation-mismatch" -> "This action belongs to a different investigation."
+        | "expected-version-required" -> "Causa needs to read this investigation again before changing it."
+        | "forged-history" -> "This investigation's history could not be read, so nothing can change it."
+        | _ -> "This is not possible right now."
+
+    /// Pure: every blocker's reason, as one sentence sequence.
+    let blockerReasons (command: Command) (lifecycle: InvestigationLifecycle option) (blockers: Blocker list) =
+        blockers |> List.map (blockerReason command lifecycle) |> List.distinct |> String.concat " "
+
+    /// Pure: the codes behind a set of blockers, for a data attribute or Administration (never visible text).
+    let blockerCodes (blockers: Blocker list) =
+        blockers |> List.map _.Code |> List.distinct |> String.concat " "
+
+    /// Pure: a refused decision as the sentence the page shows.
+    let refusalReason (command: Command) (lifecycle: InvestigationLifecycle option) (decision: Decision) =
+        match decision with
+        | Allowed _ -> "Allowed."
+        | Blocked blockers -> blockerReasons command lifecycle blockers
+        | RequiresReview reasons -> "This needs review first: " + String.concat " " reasons
+        | UnsupportedSemantics _ -> "This investigation uses rules this version of Causa does not support."
+        | Conflict _ -> "The investigation changed since this tab read it. Review the newer version first."
+        | Duplicate _ -> "This was already done."
+
+    /// Pure: the codes behind a decision (data only).
+    let decisionCodes (decision: Decision) =
+        match decision with
+        | Allowed _ -> ""
+        | Blocked blockers -> blockerCodes blockers
+        | RequiresReview _ -> "requires-review"
+        | UnsupportedSemantics _ -> "unsupported-semantics"
+        | Conflict _ -> "version-conflict"
+        | Duplicate _ -> "duplicate"
