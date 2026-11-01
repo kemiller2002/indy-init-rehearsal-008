@@ -40,3 +40,15 @@ DEV-R8-01..03: see evidence/T0-START.json (pre-existing repository; no `conditor
 - T13 asked to add `Command` to `CommandEnvelope` and a subject id to `EventPayload` (CR-T13-01).
 - Coordinator decision: **declined**. The contracts are the approved v4.1.1 specification (X17 byte-for-byte), and this run must not redesign requirements. The full decision is `Kernel.decideOn policy actor history { Envelope; Command }`, an additive function after the frozen block that changes no frozen type. T17 and the app call it. The frozen `Decide` stays as specified: Start when there is no investigation, RecordObservation otherwise.
 - Reported to the owner as a package finding: IF41-DOMAIN cannot express the command body at its frozen boundary.
+
+## DEV-R8-10 — declined CR-T19-01; ratchet exception for strengthened tests
+- CR-T19-01 (an online flag in the frozen `RequestContext`, an investigation id in the frozen RemoteUnavailable/Unresolvable conflict states) is declined for the same reason as DEV-R8-09. The engine supplies them through the existing injection points (`SaveSetup.KnownOffline`, `ConflictMachine.readRequest`). Reported to the owner as a frozen-contract finding.
+- Ratchet exception, PR #12 (T15 plus the T35 domain findings): invariant failures go from 4 to 6 against main. The increase comes only from tests T35 required to be stricter (R-07 storage mutants, R-09 request bounds), which expose two real persistence defects (snapshot-equals-replay is not independently effective; save request bounds). It is not a code regression. Both defects are assigned to persistence (T20).
+- INV22 merge (T15 × T19): T15's Recordings-driven version is kept, with `classifyIn = Require.classifier ()` because T19's binding now takes the answer context. T19's context-specific forms (R-01/R-03/R-06) are kept and run in the same test.
+
+## DEV-R8-11 — INV-04 versus SM-SAVE T-S31/T-S32 (package contradiction; reported, not resolved)
+- WI-R8-T20 found that SM-SAVE's legal transitions T-S31/T-S32 send a read immediately when the user starts Check again or goes back online, and the machine has no clock. INV-04, as T15 tightened it, caps reads and mutations at 4 each per 60 s window under total network failure. Three automatic reads (2/6/14 s) plus user-started reads exceed that.
+- Coordinator decision: neither the frozen state-machine table nor the invariant is changed in this run. INV04 RequestBounds stays red and is reported as an unverified obligation, with this contradiction raised to the owner. Options for the owner: inject a clock into SaveSetup, or amend T-S31/T-S32.
+
+## CR-T17-01 declined (frozen IF41-APP)
+- `Msg.DomainCommand of CommandEnvelope` cannot carry the command body (same gap as DEV-R8-09). The ui lane implements additive submission functions beside the frozen `Update`. Program.fs's interim `Submit`/`Workspace` (T17) is retired through a ui CR. Reported to the owner as a frozen-contract finding.

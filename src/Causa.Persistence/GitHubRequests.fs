@@ -102,3 +102,90 @@ module GitHubRequests =
           Url = graphqlUrl
           Headers = headers connection
           Body = Some(body.ToJsonString()) }
+
+    /// T19: the save mutation with its write marker as a trailer in the commit message body (PERSIST-014). Same
+    /// guard and additions as createCommitOnBranch; additions only (no deletions, no forced ref update).
+    let createCommitWithTrailer
+        (id: RequestId)
+        (connection: ConnectionContext)
+        (expectedHead: CommitOid)
+        (headline: string)
+        (body: string)
+        (additions: (RepoPath * byte[]) list)
+        : HttpRequest =
+        let request = createCommitOnBranch id connection expectedHead headline additions
+
+        match request.Body with
+        | Some text ->
+            let node = JsonNode.Parse text |> nonNull
+            let message = node["variables"] |> nonNull |> fun v -> v["input"] |> nonNull |> fun i -> i["message"] |> nonNull
+            message["body"] <- JsonValue.Create body
+            { request with Body = Some(node.ToJsonString()) }
+        | None -> request
+
+    /// compare base...head listing up to 250 commits on one page (GitHub lists at most 250: GH-TRUNCATED-LIST).
+    let compareAll (id: RequestId) (connection: ConnectionContext) (CommitOid baseOid) (CommitOid headOid) : HttpRequest =
+        get id connection (repoUrl connection.Repository (sprintf "/compare/%s...%s?per_page=250" (escape baseOid) (escape headOid)))
+
+    let private graphqlQuery (id: RequestId) (connection: ConnectionContext) (query: string) (variables: (string * string) list) =
+        let vars = JsonObject()
+
+        for (k, v) in variables do
+            vars[k] <- JsonValue.Create v
+
+        let body = JsonObject()
+        body["query"] <- JsonValue.Create query
+        body["variables"] <- vars
+
+        { Id = id
+          Method = Post
+          Url = graphqlUrl
+          Headers = headers connection
+          Body = Some(body.ToJsonString()) }
+
+    let private fileFields =
+        "oid manifest: file(path: $manifest) { object { ... on Blob { text isTruncated } } } "
+        + "events: file(path: $events) { object { ... on Blob { text isTruncated } } } "
+        + "snapshot: file(path: $snapshot) { object { ... on Blob { text isTruncated } } }"
+
+    let private fileVariables (RepoPath manifest) (RepoPath events) (RepoPath snapshot) =
+        [ "manifest", manifest; "events", events; "snapshot", snapshot ]
+
+    /// The investigation's three files at the branch's current head, with the head's oid, in one read (a query, never
+    /// a mutation): SM-CONFLICT's read of the GitHub version.
+    let fileSetAtBranch (id: RequestId) (connection: ConnectionContext) (manifest: RepoPath) (events: RepoPath) (snapshot: RepoPath) : HttpRequest =
+        graphqlQuery
+            id
+            connection
+            ("query($owner: String!, $name: String!, $ref: String!, $manifest: String!, $events: String!, $snapshot: String!) "
+             + "{ repository(owner: $owner, name: $name) { ref(qualifiedName: $ref) { target { ... on Commit { "
+             + fileFields
+             + " } } } } }")
+            ([ "owner", connection.Repository.Owner
+               "name", connection.Repository.Name
+               "ref", "refs/heads/" + connection.Repository.Branch ]
+             @ fileVariables manifest events snapshot)
+
+    /// The investigation's three files at a named commit in one read (PERSIST-005: file reads name their commit).
+    let fileSetAtCommit
+        (id: RequestId)
+        (connection: ConnectionContext)
+        (CommitOid commit)
+        (manifest: RepoPath)
+        (events: RepoPath)
+        (snapshot: RepoPath)
+        : HttpRequest =
+        graphqlQuery
+            id
+            connection
+            ("query($owner: String!, $name: String!, $oid: GitObjectID!, $manifest: String!, $events: String!, $snapshot: String!) "
+             + "{ repository(owner: $owner, name: $name) { object(oid: $oid) { ... on Commit { "
+             + fileFields
+             + " } } } }")
+            ([ "owner", connection.Repository.Owner; "name", connection.Repository.Name; "oid", commit ]
+             @ fileVariables manifest events snapshot)
+
+    /// T20 (GH-LARGE-FILE): a blob by its sha, the one re-read GitHub allows for a file the contents API returns with
+    /// `encoding: none` (files over 1 MB). A query, never a mutation.
+    let blob (id: RequestId) (connection: ConnectionContext) (sha: string) : HttpRequest =
+        get id connection (repoUrl connection.Repository ("/git/blobs/" + escape sha))
