@@ -54,6 +54,8 @@ const independent = async ({ pages: [a, b] }) => {
 };
 
 test("tabs independent with and without navigator.locks", async ({ browser }) => {
+  // Two browser contexts, three tabs each: up to six engine boots in one test.
+  test.setTimeout(240_000);
   for (const withoutLocks of [false, true]) {
     const tabs = await twoTabs(browser, withoutLocks);
     try {
