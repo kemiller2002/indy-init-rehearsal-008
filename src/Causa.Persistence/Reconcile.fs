@@ -26,6 +26,14 @@ module CompareView =
         | Some files when view.Total = int64 view.Commits.Length && files.Length < fileListLimit -> Some files
         | _ -> None
 
+    /// The changed file names of a paged compare's first page (GitHubRequests.compare, page 1): GitHub shows the file
+    /// list on the first page only, and there it covers the entire comparison, up to its 300-file cap, however many
+    /// commits the comparison holds. A list at the cap or more may be truncated, so it is unknown (review T36 F-01).
+    let firstPageFiles (view: CompareView) : string list option =
+        match view.Files with
+        | Some files when files.Length < fileListLimit -> Some files
+        | _ -> None
+
 /// A file set read in one GraphQL query: the commit it was read at and the three files (None when a file is absent).
 type FileSetRead =
     { At: CommitOid
@@ -110,6 +118,21 @@ module Answers =
 
             Some { Commits = commits; Total = total; Files = files }
         | None -> None
+
+    /// The head of the range a compare answer covers, from the `url` GitHub echoes for the requested base...head
+    /// (".../compare/<base>...<head>"). Only a full commit id counts: a branch name or abbreviation is not a commit.
+    let compareHead (body: string) : CommitOid option =
+        path [ "url" ] body
+        |> Option.bind str
+        |> Option.bind (fun url ->
+            match url.LastIndexOf("/compare/", StringComparison.Ordinal) with
+            | -1 -> None
+            | i ->
+                let range = url.Substring(i + "/compare/".Length).Split('?')[0]
+
+                match range.Split("...") with
+                | [| _; head |] when head.Length = 40 && head |> Seq.forall Uri.IsHexDigit -> Some(CommitOid head)
+                | _ -> None)
 
     /// A GraphQL file-set read (GitHubRequests.fileSetAtBranch or fileSetAtCommit). None when the answer does not
     /// decode or a file is truncated; a missing file is None in its slot.

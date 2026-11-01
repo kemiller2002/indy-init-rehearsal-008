@@ -183,3 +183,68 @@ module PERSIST015Tests =
         ``PERSIST-015-O8`` ()
         ``PERSIST-015-O9`` ()
         ``PERSIST-015-O10`` ()
+
+    /// PERSIST-015-O4 beyond GitHub's 250-commit compare page: more than 250 commits after the expected head.
+    [<Fact>]
+    let ReconcileBeyond250Commits () =
+        // This save's commit applied, then 260 unrelated commits: the marker commit is still found and confirmed.
+        let fake, tab = saveAndLose (LoseAfterApplying LostAfterSending)
+        for _ in 1..260 do InvariantFake.externalCommit fake |> ignore
+        let tab = drain fake tab
+        Assert.Equal("Saved", stateName tab)
+
+        // Nothing written, then 260 unrelated commits: reconciliation still decides (not written; rebase and save).
+        let fake, tab = saveAndLose lost
+        for _ in 1..260 do InvariantFake.externalCommit fake |> ignore
+        let tab = drain fake tab
+        Assert.Equal("Saved", stateName tab)
+        Assert.Equal(2, mutations fake |> List.length)
+
+    /// T32 beyond 250 commits, when the investigation's own files changed among them: the stale-head conflict, with
+    /// nothing more sent; reconciliation reads stay bounded (one head read and one compare page).
+    [<Fact>]
+    let ReconcileBeyond250CommitsInvestigationChanged () =
+        let fake, tab = saveAndLose lost
+        for _ in 1..130 do InvariantFake.externalCommit fake |> ignore
+        otherWriterChangesInvestigation fake |> ignore
+        for _ in 1..130 do InvariantFake.externalCommit fake |> ignore
+        let before = requests fake |> List.length
+        let tab = drain fake tab
+
+        match tab.Session.State with
+        | SaveState.Conflict _ -> ()
+        | other -> failwithf "expected Conflict, got %A" other
+
+        Assert.Equal(1, mutations fake |> List.length)
+        let compares = requests fake |> List.skip before |> List.filter (fun r -> r.Url.Contains("/compare/", System.StringComparison.Ordinal))
+        Assert.Equal(1, compares.Length)
+
+    /// T32 (WI-R8-ITESTS): when the last automatic reconciliation read fails, the machine takes its own
+    /// ReconcileReadFailed as ReconcileReadsSpent (SM-SAVE T-S30): Unknown commit outcome with no read left, nothing
+    /// outstanding, Check again offered, no fault. Check again then reaches the decision.
+    [<Fact>]
+    let LastReconcileReadFailureOffersCheckAgain () =
+        let fake, tab = saveAndLose (LoseAfterApplying LostAfterSending)
+        fake.Server.Script [ lost; lost; lost ]
+        let tab = drain fake tab
+        Assert.Empty(tab.Faults)
+        Assert.Equal(SaveState.UnknownOutcome 0, tab.Session.State)
+        Assert.Equal(None, tab.Session.Outstanding)
+        Assert.Contains(tab.Announced, fun a -> a.Contains("Check again", System.StringComparison.Ordinal))
+
+        let tab = tab |> input SaveInput.CheckAgain |> drain fake
+        Assert.Empty(tab.Faults)
+
+        match tab.Session.State with
+        | SaveState.Saved(Confirmed c) -> Assert.Equal(InvariantFake.head fake, c.CommitOid)
+        | other -> failwithf "expected Saved after Check again, got %A" other
+
+        // A Check again read that fails also offers Check again, never a fault.
+        let fake, tab = saveAndLose (LoseAfterApplying LostAfterSending)
+        fake.Server.Script [ lost; lost; lost ]
+        let tab = drain fake tab
+        fake.Server.Script [ lost ]
+        let tab = tab |> input SaveInput.CheckAgain |> drain fake
+        Assert.Empty(tab.Faults)
+        Assert.Equal(SaveState.UnknownOutcome 0, tab.Session.State)
+        Assert.Equal(None, tab.Session.Outstanding)

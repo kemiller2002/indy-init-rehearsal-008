@@ -188,11 +188,16 @@ module StatefulFake =
                 else
                     acc
 
-            let ordered = chain h.Oid [] |> List.truncate 250
-            let perPage = queryValue "per_page" query |> Option.map int |> Option.defaultValue 250
+            // Without a page parameter GitHub lists at most 250 commits (GH-TRUNCATED-LIST); a paged request pages
+            // through every commit of the comparison, at most 100 a page, with the file list on page 1 only.
+            let paged = (queryValue "page" query).IsSome
+            let ordered = chain h.Oid [] |> fun all -> if paged then all else List.truncate 250 all
+            let perPage = queryValue "per_page" query |> Option.map int |> Option.defaultValue 250 |> fun n -> if paged then min n 100 else n
             let page = queryValue "page" query |> Option.map int |> Option.defaultValue 1
             let listed = ordered |> List.skip (min ordered.Length ((page - 1) * perPage)) |> List.truncate perPage
             let o = JsonObject()
+            // GitHub echoes the requested range in the answer's url.
+            o["url"] <- JsonValue.Create(sprintf "https://api.github.com/repos/%s/%s/compare/%s...%s" state.Owner state.Name baseOid headOid)
             o["status"] <- JsonValue.Create status
             o["ahead_by"] <- JsonValue.Create ahead.Count
             o["behind_by"] <- JsonValue.Create behind.Count
@@ -225,7 +230,7 @@ module StatefulFake =
                 f["filename"] <- JsonValue.Create p
                 files.Add f
 
-            o["files"] <- files
+            if page = 1 then o["files"] <- files
             json id 200 o
         | _ -> message id 404 "Not Found"
 

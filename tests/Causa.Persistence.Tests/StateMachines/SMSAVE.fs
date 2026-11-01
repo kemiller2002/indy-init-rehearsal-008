@@ -290,8 +290,15 @@ module SMSAVE =
         Assert.Equal<int list>([ 4000 ], schedules effects)
         let s', effects' = step s SaveInput.ReconcileReadFailed
         Assert.Equal<int list>([ 8000 ], schedules effects')
-        // Three automatic reads made: the guard fails, fail closed.
-        Assert.True(Result.isError (online.Step (ctx 1L) s' SaveInput.ReconcileReadFailed))
+        // Three automatic reads made: no automatic read is left, so the failure is ReconcileReadsSpent (T-S30, T32):
+        // Check again is offered, nothing is outstanding, nothing is sent, never a fault.
+        match online.Step (ctx 1L) { s' with Outstanding = Some(RequestId 9L, ReconcileHead) } SaveInput.ReconcileReadFailed with
+        | Ok(spent, effects'') ->
+            Assert.Equal(SaveState.UnknownOutcome 0, spent.State)
+            Assert.Equal(None, spent.Outstanding)
+            Assert.Empty(sends effects'')
+            Assert.Empty(schedules effects'')
+        | Error fault -> failwithf "the last failed read must be ReconcileReadsSpent, got %A" fault
 
     [<Fact>]
     let ``T-S30`` () =
