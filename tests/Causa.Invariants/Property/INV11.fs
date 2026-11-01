@@ -47,8 +47,11 @@ module INV11 =
                 | Duplicate _ -> events, state)
             start
 
+    /// One to eight distinct commands (CR-T19-02): an empty list writes no file set, so it can never test INV-11.
     let commands: Gen<CommandEnvelope list> =
-        Gen.listOf 8 (Gen.intRange 1 10000) |> Gen.map (List.distinct >> List.map Fixture.command)
+        Gen.intRange 1 8
+        |> Gen.bind (fun n -> Gen.listOfLength n (Gen.intRange 1 10000))
+        |> Gen.map (List.distinct >> List.map Fixture.command)
 
     let private empty = { Manifest = [||]; Events = [||]; Snapshot = [||] }
 

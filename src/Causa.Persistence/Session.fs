@@ -510,3 +510,224 @@ module SaveProcess =
               Tab = tab
               NextMarker = Markers.forTab tab
               KnownOffline = false }
+
+/// T20: what opening an investigation at the branch head found (EXT-DATA-005, EXT-DATA-007, PERSIST-005).
+type OpenResult =
+    /// The three files read at the head verified as a reader would (causa-data v1.0.0 §11); ReadAt is the base head.
+    | Opened of VerifiedInvestigation
+    /// No file of the investigation exists at this head: the only state from which an explicit create may be sent.
+    | AuthorizedEmpty of at: CommitOid
+    /// Files exist but fail the storage contract or replay: fail closed, never load partially (EXT-DATA-005-O2).
+    | Incompatible of at: CommitOid * VerificationFailure list
+    /// GraphQL truncated a file: re-read each file with the contents API at this commit (GH-LARGE-FILE).
+    | LargeFiles of at: CommitOid
+    | OpenRefused of ProviderError
+
+/// Why an explicit create was not sent (EXT-DATA-006-O2).
+type CreateRefusal =
+    /// Connect did not state write permission for this credential.
+    | NoWriteAccess
+    /// The head was not read as empty for this investigation in this tab: never overwrite unread remote history.
+    | HeadNotReadEmpty
+    /// A file outside the investigation's own prefix (PERSIST-006-O5, causa-data v1.0.0 §9.4.4).
+    | OutsidePrefix of paths: string list
+    /// Another mutation of this tab is in flight: at most one at a time (PERSIST-006-O6); the create waits in memory.
+    | MutationInFlight
+
+/// One file read through the contents API (GH-LARGE-FILE handling).
+type ContentsRead =
+    | ContentsBytes of path: string * bytes: byte[]
+    /// `encoding: none`: the file is too large for the contents API; its blob sha names the one re-read.
+    | ContentsTooLarge of path: string * blobSha: string
+    | ContentsUnreadable of ProviderError
+
+/// T20: the GitHub provider. Connect, read (open at head), explicit create and the write/conflict paths, all as pure
+/// request builders and answer interpreters over IF41-WIRE: the engine executes requests through Limen and never
+/// touches a browser API or the credential (DEC-R7-001, PF-015). Connect and read only ever build queries
+/// (EXT-DATA-006-O1); the only mutation is createCommitOnBranch with an expected head the tab read.
+[<RequireQualifiedAccess>]
+module GitHubProvider =
+    open System.Text.Json
+
+    let private outcomeId (outcome: HttpOutcome) =
+        match outcome with
+        | Answered(id, _, _, _)
+        | NotAnswered(id, _) -> id
+
+    let private parse (body: string) =
+        try
+            use doc = JsonDocument.Parse body
+            Some(doc.RootElement.Clone())
+        with :? JsonException ->
+            None
+
+    let private prop (name: string) (e: JsonElement) =
+        match e.ValueKind with
+        | JsonValueKind.Object ->
+            match e.TryGetProperty name with
+            | true, v when v.ValueKind <> JsonValueKind.Null -> Some v
+            | _ -> None
+        | _ -> None
+
+    let private str (e: JsonElement) =
+        match e.ValueKind with
+        | JsonValueKind.String -> e.GetString() |> Option.ofObj
+        | _ -> None
+
+    let private isTrue (e: JsonElement option) =
+        match e with
+        | Some v -> v.ValueKind = JsonValueKind.True
+        | None -> false
+
+    /// Write access comes only from the permissions GitHub states for the repository (push, maintain or admin),
+    /// never from a successful read or from a token having been supplied (EXT-DATA-005, EXT-DATA-007-O2).
+    let canWrite (repositoryBody: string) : bool option =
+        parse repositoryBody
+        |> Option.bind (prop "permissions")
+        |> Option.map (fun p -> isTrue (prop "push" p) || isTrue (prop "maintain" p) || isTrue (prop "admin" p))
+
+    /// Connect's answer. An answer to any request but the one sent is superseded; a token alone never connects.
+    let interpretConnect (sent: RequestId) (outcome: HttpOutcome) : ConnectResult =
+        if outcomeId outcome <> sent then
+            ConnectSuperseded
+        else
+            match (classify ConnectRepository outcome).Result with
+            | Ok answer ->
+                match canWrite answer.Body with
+                | Some write -> ConnectAccepted write
+                | None -> ConnectRejected(Malformed "the repository answer has no permissions object")
+            | Error error -> ConnectRejected error
+
+    /// The Connector the App's SM-CONNECTION drives (IF41-ERRORS ConnectResult): GET the repository, nothing else.
+    let connector: Connector =
+        { ConnectRequest = GitHubRequests.repository
+          InterpretConnect = interpretConnect }
+
+    /// Open (read): the investigation's three files and the head's oid in one GraphQL query at the branch head.
+    let openRequest (id: RequestId) (connection: ConnectionContext) (investigation: InvestigationId) : HttpRequest =
+        GitHubRequests.fileSetAtBranch
+            id
+            connection
+            (StoragePaths.manifest investigation)
+            (StoragePaths.events investigation)
+            (StoragePaths.snapshot investigation)
+
+    let private truncatedAt (body: string) : CommitOid option =
+        let target =
+            parse body
+            |> Option.bind (prop "data")
+            |> Option.bind (prop "repository")
+            |> Option.bind (fun r -> prop "ref" r |> Option.bind (prop "target") |> Option.orElse (prop "object" r))
+
+        match target with
+        | Some t ->
+            let truncated slot =
+                prop slot t |> Option.bind (prop "object") |> Option.bind (prop "isTruncated") |> isTrue
+
+            if [ "manifest"; "events"; "snapshot" ] |> List.exists truncated then
+                prop "oid" t |> Option.bind str |> Option.map CommitOid
+            else
+                None
+        | None -> None
+
+    /// Interpret the open read: verify through the codec (full contract validation and F# replay) or fail closed.
+    let interpretOpen (codec: StorageCodec) (outcome: HttpOutcome) : OpenResult =
+        match (classify (Read "graphql:fileSet") outcome).Result with
+        | Error error -> OpenRefused error
+        | Ok answer ->
+            match Answers.fileSet answer.Body with
+            | Some { At = at; Manifest = None; Events = None; Snapshot = None } -> AuthorizedEmpty at
+            | Some { At = at; Manifest = Some m; Events = Some e; Snapshot = Some s } ->
+                match codec.Verify at { Manifest = m; Events = e; Snapshot = s } with
+                | Ok verified -> Opened verified
+                | Error failures -> Incompatible(at, failures)
+            | Some read ->
+                let missing =
+                    [ "manifest.json", read.Manifest; "events.ndjson", read.Events; "snapshot.json", read.Snapshot ]
+                    |> List.filter (snd >> Option.isNone)
+                    |> List.map (fun (file, _) -> MissingRequiredField(file, "file"))
+
+                Incompatible(read.At, missing)
+            | None ->
+                match truncatedAt answer.Body with
+                | Some at -> LargeFiles at
+                | None when Answers.refMissing answer.Body -> OpenRefused(NotFound "branch")
+                | None -> OpenRefused(Malformed "the file-set answer does not decode")
+
+    /// Decode a contents (or blob) read. `encoding: none` names the blob to re-read once (GH-LARGE-FILE).
+    let interpretContents (outcome: HttpOutcome) : ContentsRead =
+        match (classify (Read "rest:contents") outcome).Result with
+        | Error error -> ContentsUnreadable error
+        | Ok answer ->
+            match parse answer.Body with
+            | Some root ->
+                let path = prop "path" root |> Option.bind str |> Option.defaultValue ""
+
+                match prop "encoding" root |> Option.bind str, prop "content" root |> Option.bind str, prop "sha" root |> Option.bind str with
+                | Some "none", _, Some sha -> ContentsTooLarge(path, sha)
+                | Some "base64", Some content, _ ->
+                    try
+                        ContentsBytes(path, Convert.FromBase64String(content.Replace("\n", "").Replace("\r", "")))
+                    with :? FormatException ->
+                        ContentsUnreadable(Malformed "the content is not base64")
+                | _ -> ContentsUnreadable(Malformed "the contents answer has no decodable content")
+            | None -> ContentsUnreadable(Malformed "the contents answer does not decode")
+
+    /// The large-file re-read: at most maxAttempts GhLargeFile (one) blob read after `encoding: none`; never more.
+    let largeFileRetry (id: RequestId) (connection: ConnectionContext) (attemptsSoFar: int) (read: ContentsRead) : HttpRequest option =
+        match read with
+        | ContentsTooLarge(_, sha) when attemptsSoFar < maxAttempts GhLargeFile -> Some(GitHubRequests.blob id connection sha)
+        | _ -> None
+
+    let private additions (investigation: InvestigationId) (files: FileSet) =
+        [ StoragePaths.manifest investigation, files.Manifest
+          StoragePaths.events investigation, files.Events
+          StoragePaths.snapshot investigation, files.Snapshot ]
+
+    /// Explicit create (EXT-DATA-006-O2): only after Connect stated write access and an open read found this
+    /// investigation absent at the head; the commit is guarded by that head, carries the tab's write marker and adds
+    /// only the investigation's own three files.
+    let createRequest
+        (context: RequestContext)
+        (writeAccess: bool)
+        (headRead: OpenResult)
+        (investigation: InvestigationId)
+        (files: FileSet)
+        (marker: WriteMarker)
+        : Result<HttpRequest, CreateRefusal> =
+        let changes = additions investigation files
+
+        let outside =
+            changes |> List.map (fun (RepoPath p, _) -> p) |> List.filter (StoragePaths.isUnder investigation >> not)
+
+        match writeAccess, headRead with
+        | false, _ -> Error NoWriteAccess
+        | true, _ when context.MutationInFlightElsewhere -> Error MutationInFlight
+        | true, AuthorizedEmpty _ when not outside.IsEmpty -> Error(OutsidePrefix outside)
+        | true, AuthorizedEmpty head ->
+            let (InvestigationId g) = investigation
+
+            Ok(
+                GitHubRequests.createCommitWithTrailer
+                    context.NextId
+                    context.Connection
+                    head
+                    (sprintf "Create investigation %s" (g.ToString("D").ToLowerInvariant()))
+                    (Markers.trailer marker)
+                    changes
+            )
+        | true, _ -> Error HeadNotReadEmpty
+
+    /// The provider-side FileSetOf the engine supplies to SaveSetup: the confirmed history the tab opened plus the
+    /// events the kernel decided for the session's in-flight commands, encoded with causa-storage v1.0.0. `decided`
+    /// is the engine's (integration/ui); the encoding and the base are persistence's.
+    let fileSetOf (codec: StorageCodec) (opened: VerifiedInvestigation) (decided: InvestigationSession -> EventEnvelope list) : InvestigationSession -> FileSet =
+        fun session -> codec.Encode opened (decided session)
+
+    /// The SaveSetup for one tab, built per update with SM-NETWORK's current state (KnownOffline injection point).
+    let saveSetup (tab: Guid) (nextMarker: unit -> WriteMarker) (fileSet: InvestigationSession -> FileSet) (knownOffline: bool) : SaveSetup =
+        { Codec = StorageV1.codec
+          FileSetOf = fileSet
+          Tab = tab
+          NextMarker = nextMarker
+          KnownOffline = knownOffline }
