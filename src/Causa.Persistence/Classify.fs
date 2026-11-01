@@ -171,7 +171,35 @@ module ErrorMatrix =
 
     /// The form GitHub answers for `Commit.file(path:)` when the commit's tree has no such path (CR-T21-01, seen live
     /// in run 41340579555): a GraphQL error of type NOT_FOUND, "Could not resolve file for path '<path>'.".
-    let private missingPathPattern = Regex("^Could not resolve file for path '[^']+'\\.?$", RegexOptions.CultureInvariant)
+    let private missingPathPattern = Regex("^Could not resolve file for path '([^']+)'\\.?$", RegexOptions.CultureInvariant)
+
+    /// The file each aliased slot of the file-set query reads (GitHubRequests.fileSetAtBranch / fileSetAtCommit bind
+    /// `manifest`, `events` and `snapshot` to StoragePaths.manifest/events/snapshot of one investigation).
+    let private slotPath (slot: string) (dir: string) : string option =
+        match slot with
+        | "manifest" -> Some(dir + "manifest.json")
+        | "events" -> Some(dir + "events.ndjson")
+        | "snapshot" -> Some(dir + "snapshot.json")
+        | _ -> None
+
+    /// An investigation directory as StoragePaths.prefix writes it: `investigations/<lower-case guid>/`.
+    let private investigationDir = Regex("^investigations/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/", RegexOptions.CultureInvariant)
+
+    /// The path an absent-file error quotes, when it is exactly the path the query read for the slot the error names
+    /// (review T36 F-05): the error's response path ends in a slot alias, and the quoted text equals that slot's
+    /// storage path under an investigation directory. None for any other quoted path.
+    let private quotedSlotPath (e: GraphQLError) : string option =
+        let m = missingPathPattern.Match e.Message
+
+        if not m.Success then
+            None
+        else
+            let quoted = m.Groups.[1].Value
+            let dir = investigationDir.Match quoted
+
+            match List.tryLast e.Path with
+            | Some slot when dir.Success && slotPath slot dir.Value = Some quoted -> Some quoted
+            | _ -> None
 
     let private dataAt (steps: string list) (body: JsonElement option) : JsonElement option =
         steps
@@ -201,14 +229,27 @@ module ErrorMatrix =
     /// the field the error names (if it names one) answered null; everything else keeps its class.
     let isAbsentFile (body: JsonElement option) (e: GraphQLError) : bool =
         e.Type = Some "NOT_FOUND"
-        && missingPathPattern.IsMatch e.Message
+        && (quotedSlotPath e).IsSome
         && (commitOidOfRead body).IsSome
-        && (match e.Path with
-            | [] -> true
-            | steps ->
-                match dataAt steps body with
-                | None -> true
-                | Some v -> v.ValueKind = JsonValueKind.Null)
+        && (match dataAt e.Path body with
+            | None -> true
+            | Some v -> v.ValueKind = JsonValueKind.Null)
+
+    /// The absent-file errors of one read are absorbed only together, and only when they all quote files of one
+    /// investigation: a read names one investigation's three paths, so errors quoting two directories cannot all be
+    /// the paths read (review T36 F-05).
+    let private absentFiles (body: JsonElement option) (errors: GraphQLError list) : GraphQLError list =
+        let absent = errors |> List.filter (isAbsentFile body)
+
+        let dirs =
+            absent
+            |> List.choose quotedSlotPath
+            |> List.map (fun p -> p.Substring(0, p.LastIndexOf '/' + 1))
+            |> List.distinct
+
+        match dirs with
+        | [ _ ] -> absent
+        | _ -> []
 
     let private restMessage (body: JsonElement option) : string =
         body |> Option.bind (prop "message") |> Option.bind str |> Option.defaultValue ""
@@ -316,7 +357,10 @@ module ErrorMatrix =
             let errors =
                 match context with
                 // R-07: on a read, a missing path inside a found commit is an absent file, decoded by the reader.
-                | Read _ -> graphQLErrors body |> List.filter (isAbsentFile body >> not)
+                | Read _ ->
+                    let all = graphQLErrors body
+                    let absent = absentFiles body all
+                    all |> List.filter (fun e -> not (List.contains e absent))
                 | Mutation _
                 | ConnectRepository
                 | Compare _ -> graphQLErrors body
@@ -416,6 +460,15 @@ module ErrorMatrix =
         | _, Mutation _ when uncertain -> UnknownMutationOutcome
         | _, (ConnectRepository | Read _ | Compare _) when uncertain -> FailedRead
         | _ -> Definite
+
+    /// `meaning`, with the one case the class alone cannot tell (review T36 F-06): an HTTP 404 from the GraphQL
+    /// endpoint on the mutation. The matrix's GH-NOT-FOUND for createCommitOnBranch is a GraphQL NOT_FOUND error
+    /// (branch missing); a bare 404 status names no branch, so its outcome is unknown and is reconciled (PERSIST-015),
+    /// never reported as "branch not found".
+    let meaningOf (context: AnswerContext) (outcome: HttpOutcome) (classified: Classified) : Meaning =
+        match context, outcome, classified.Class with
+        | Mutation _, Answered(_, 404, _, _), GhNotFound -> UnknownMutationOutcome
+        | _ -> meaning context classified
 
     /// The matrix classifier as the IF41-ERRORS Classifier type for one context.
     let classifier (context: AnswerContext) : Classifier = fun outcome -> (classify context outcome).Result

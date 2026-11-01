@@ -377,7 +377,8 @@ module SaveProcess =
                 | Some _ -> Differ
                 | None -> Unreadable
             | None -> Unreadable
-        | Error(NotFound _) -> Differ
+        // A refused read (a 404 included) says nothing about the bytes at the commit: the read failed, so the save goes
+        // to the reconcile path (SM-SAVE ReadBackReadFailed / ReconcileReadFailed), never "different bytes" (T36 F-06).
         | Error _ -> Unreadable
 
     let private outcomeId (outcome: HttpOutcome) =
@@ -386,11 +387,12 @@ module SaveProcess =
         | NotAnswered(id, _) -> id
 
     /// Whether the investigation's own files changed between the base head and `head`, from a compare answer. Unknown
-    /// (no file list, or a truncated one) counts as changed: never overwrite on a guess (PERSIST-011).
+    /// (no file list, a truncated commit list, or a file list at GitHub's 300-file cap) counts as changed: never
+    /// overwrite on a guess (PERSIST-011, review T36 F-01).
     let private investigationChanged (session: InvestigationSession) (view: CompareView) =
-        match view.Files with
-        | Some files when view.Total = int64 view.Commits.Length -> files |> List.exists (StoragePaths.isUnder session.Id)
-        | _ -> true
+        match CompareView.completeFiles view with
+        | Some files -> files |> List.exists (StoragePaths.isUnder session.Id)
+        | None -> true
 
     let interpret (setup: SaveSetup) (context: RequestContext) (session: InvestigationSession) (outcome: HttpOutcome) : Interpretation =
         let id = outcomeId outcome
@@ -411,7 +413,7 @@ module SaveProcess =
                 | Error(StaleHead _) -> next FreshHead (GitHubRequests.branchHead context.NextId context.Connection)
                 | Error AuthenticationFailed -> MachineEvent SaveInput.CredentialRefused
                 | Error error ->
-                    match meaning (Mutation session.BaseHead) classified with
+                    match meaningOf (Mutation session.BaseHead) outcome classified with
                     | FailedBeforeSendingMeaning -> MachineEvent SaveInput.FailedBeforeSending
                     | UnknownMutationOutcome -> MachineEvent SaveInput.AnswerLost
                     | FailedRead
