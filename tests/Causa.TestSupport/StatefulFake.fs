@@ -240,21 +240,33 @@ module StatefulFake =
             | None, None -> None
 
         let repo = JsonObject()
+        let errors = JsonArray()
 
         match commit with
         | Some c ->
             let target = JsonObject()
             target["oid"] <- JsonValue.Create(key c.Oid)
+            // CR-T21-01 (PF-013): GitHub answers `file(path:)` for a path the commit lacks with a null field and a
+            // NOT_FOUND error naming it, never a bare null; the fake answers the same way.
+            let targetPath =
+                match text "oid" with
+                | Some _ -> [ "repository"; "object" ]
+                | None -> [ "repository"; "ref"; "target" ]
 
             for slot in [ "manifest"; "events"; "snapshot" ] do
-                match text slot |> Option.bind c.Tree.TryFind with
-                | Some bytes ->
-                    let blob = JsonObject()
-                    blob["text"] <- JsonValue.Create(Encoding.UTF8.GetString bytes)
-                    blob["isTruncated"] <- JsonValue.Create false
-                    let entry = JsonObject()
-                    entry["object"] <- blob
-                    target[slot] <- entry
+                match text slot with
+                | Some p ->
+                    match c.Tree.TryFind p with
+                    | Some bytes ->
+                        let blob = JsonObject()
+                        blob["text"] <- JsonValue.Create(Encoding.UTF8.GetString bytes)
+                        blob["isTruncated"] <- JsonValue.Create false
+                        let entry = JsonObject()
+                        entry["object"] <- blob
+                        target[slot] <- entry
+                    | None ->
+                        target[slot] <- null
+                        errors.Add(Recordings.missingPathError (targetPath @ [ slot ]) p)
                 | None -> target[slot] <- null
 
             match text "oid" with
@@ -271,6 +283,10 @@ module StatefulFake =
         data["repository"] <- repo
         let o = JsonObject()
         o["data"] <- data
+
+        if errors.Count > 0 then
+            o["errors"] <- errors
+
         json id 200 o
 
     let private apply (request: HttpRequest) (state: FakeState) : FakeState * HttpOutcome =
