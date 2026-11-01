@@ -111,6 +111,14 @@ module Program =
         | Text s -> w.WriteString(name, s)
         | Number n -> w.WriteNumber(name, n)
         | Flag b -> w.WriteBoolean(name, b)
+        | Rows rows ->
+            w.WriteStartArray name
+            rows
+            |> List.iter (fun fields ->
+                w.WriteStartObject()
+                fields |> List.iter (fun (field, text) -> w.WriteString(field, text))
+                w.WriteEndObject())
+            w.WriteEndArray()
 
     /// Pure: the answer as Limen JSON.
     let encode (answer: Outgoing) : string =

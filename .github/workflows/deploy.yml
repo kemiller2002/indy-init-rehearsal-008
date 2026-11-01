@@ -20,7 +20,9 @@ concurrency:
 
 jobs:
   build:
-    if: vars.DEPLOY_TARGET == 'github-pages'
+    # The owner confirmed GitHub Pages as Causa's target on 2026-11-01 (Pages enabled, source GitHub Actions). The
+    # DEPLOY_TARGET variable was not visible to Actions, so every run skipped; the gate is now the repository itself.
+    if: github.repository == 'kemiller2002/indy-init-rehearsal-008'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     defaults:

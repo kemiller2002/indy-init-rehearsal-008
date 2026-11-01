@@ -731,3 +731,336 @@ module GitHubProvider =
           Tab = tab
           NextMarker = nextMarker
           KnownOffline = knownOffline }
+
+/// T25 (EXT-DATA-013): where the active demonstration catalog lives, as causa-data `catalog/active.json` names it.
+type CatalogPointer =
+    { CatalogId: string
+      CatalogVersion: string
+      Manifest: RepoPath
+      Workspace: string }
+
+/// One case of the catalog manifest: the investigation's directory and the digests and state it must replay to.
+type CatalogEntry =
+    { CaseKey: string
+      Title: string
+      Investigation: InvestigationId
+      Path: string
+      ManifestSha256: string
+      EventsSha256: string
+      SnapshotSha256: string
+      ExpectedStateSha256: string
+      ExpectedLifecycle: string
+      ExpectedVersion: int64 }
+
+/// A case after verification. Fail closed per item: a refused case is never presented as loaded, and one refused
+/// case does not prevent the others from loading.
+type CatalogCase =
+    | CaseLoaded of entry: CatalogEntry * state: V1State
+    | CaseRefused of entry: CatalogEntry * failures: VerificationFailure list
+
+type CatalogFailure =
+    | CatalogUnreadable of file: string * ProviderError
+    | CatalogMalformed of file: string * detail: string
+
+/// The catalog the engine shows, as data: the commit it was read at, the pointer and every case's outcome.
+type Catalog =
+    { ReadAt: CommitOid
+      Pointer: CatalogPointer
+      Cases: CatalogCase list }
+
+/// The catalog load after Connect, as a pure state machine over IF41-WIRE: `request` names the next read (a query,
+/// never a mutation) and `advance` interprets its answer. Every file is read at the one commit the head read named.
+type CatalogLoad =
+    | ReadingHead
+    | ReadingActive of at: CommitOid
+    | ReadingManifest of at: CommitOid * pointer: CatalogPointer
+    /// Reading the current case's files one by one (`read` holds those read so far), then the remaining cases.
+    | ReadingCase of at: CommitOid * pointer: CatalogPointer * current: CatalogEntry * read: (string * byte[]) list * remaining: CatalogEntry list * loaded: CatalogCase list
+    | CatalogReady of Catalog
+    | CatalogFailed of CatalogFailure
+
+[<RequireQualifiedAccess>]
+module HistoricalCatalog =
+    let activePath = RepoPath "catalog/active.json"
+    let caseFiles = [ "manifest.json"; "events.ndjson"; "snapshot.json" ]
+
+    let private text name json =
+        match Canonical.field name json with
+        | Some(JString s) -> Some s
+        | _ -> None
+
+    let private integer name json =
+        match Canonical.field name json with
+        | Some(JInt n) -> Some n
+        | _ -> None
+
+    let private uuid (s: string) =
+        match Guid.TryParse s with
+        | true, g when g <> Guid.Empty -> Some(InvestigationId g)
+        | _ -> None
+
+    /// CONTRACT §2.2: a JSON document is its canonical text plus exactly one LF.
+    let private canonicalDocument (file: string) (bytes: byte[]) : Result<Json * byte[], VerificationFailure> =
+        let n = bytes.Length
+
+        if n < 2 || bytes[n - 1] <> 10uy || bytes[n - 2] = 10uy then
+            Error(SchemaInvalid(file, "the file is not canonical text plus exactly one LF"))
+        else
+            let body = bytes[.. n - 2]
+
+            match Canonical.parse body with
+            | Error e -> Error(SchemaInvalid(file, e))
+            | Ok json when Canonical.bytes json <> body -> Error(SchemaInvalid(file, "the text is not canonical (RFC 8785)"))
+            | Ok json -> Ok(json, body)
+
+    let parsePointer (bytes: byte[]) : Result<CatalogPointer, CatalogFailure> =
+        match Canonical.parse (Text.Encoding.UTF8.GetBytes((Text.Encoding.UTF8.GetString bytes).TrimEnd '\n')) with
+        | Ok json ->
+            match text "catalogId" json, text "catalogVersion" json, text "manifest" json, text "workspace" json with
+            | Some id, Some version, Some manifest, Some workspace when not (workspace.StartsWith("fixtures/", StringComparison.Ordinal)) ->
+                Ok { CatalogId = id; CatalogVersion = version; Manifest = RepoPath manifest; Workspace = workspace.TrimEnd '/' }
+            | _ -> Error(CatalogMalformed("catalog/active.json", "catalogId, catalogVersion, manifest or workspace is missing"))
+        | Error e -> Error(CatalogMalformed("catalog/active.json", e))
+
+    let private entryOf (json: Json) : CatalogEntry option =
+        let field name = text name json
+
+        match field "caseKey" |> Option.orElse (field "scenarioKey"), field "title", field "investigationId" |> Option.bind uuid with
+        | Some key, Some title, Some id ->
+            match field "manifestSha256", field "eventsSha256", field "snapshotSha256", field "expectedStateSha256", field "expectedLifecycle", integer "expectedVersion" json with
+            | Some m, Some e, Some s, Some st, Some lc, Some v ->
+                Some
+                    { CaseKey = key
+                      Title = title
+                      Investigation = id
+                      Path = field "path" |> Option.defaultValue ""
+                      ManifestSha256 = m
+                      EventsSha256 = e
+                      SnapshotSha256 = s
+                      ExpectedStateSha256 = st
+                      ExpectedLifecycle = lc
+                      ExpectedVersion = v }
+            | _ -> None
+        | _ -> None
+
+    /// The catalog manifest's cases (`cases`; a dataset manifest's `investigations` is read the same way).
+    let parseManifest (file: string) (bytes: byte[]) : Result<CatalogEntry list, CatalogFailure> =
+        match Canonical.parse (Text.Encoding.UTF8.GetBytes((Text.Encoding.UTF8.GetString bytes).TrimEnd '\n')) with
+        | Ok json ->
+            match Canonical.field "cases" json |> Option.orElse (Canonical.field "investigations" json) with
+            | Some(JArray items) ->
+                let entries = items |> List.map entryOf
+
+                if entries |> List.forall Option.isSome then
+                    Ok(List.choose id entries)
+                else
+                    Error(CatalogMalformed(file, "a case lacks a required field"))
+            | _ -> Error(CatalogMalformed(file, "the manifest has no cases"))
+        | Error e -> Error(CatalogMalformed(file, e))
+
+    let rec private v1 (json: Json) : V1Value =
+        match json with
+        | JNull -> VNull
+        | JBool b -> VBool b
+        | JInt n -> VInt n
+        | JString s -> VText s
+        | JArray xs -> VArray(List.map v1 xs)
+        | JObject fields -> VObject(fields |> List.map (fun (k, v) -> k, v1 v))
+
+    let private eventOf (index: int) (line: string) : Result<V1Event, VerificationFailure> =
+        let file = "events.ndjson"
+
+        match Canonical.parse (Text.Encoding.UTF8.GetBytes line) with
+        | Error e -> Error(SchemaInvalid(file, sprintf "line %d: %s" index e))
+        | Ok json when Canonical.render json <> line -> Error(SchemaInvalid(file, sprintf "line %d is not canonical" index))
+        | Ok json ->
+            let guid name = text name json |> Option.bind (fun s -> match Guid.TryParse s with | true, g -> Some g | _ -> None)
+
+            match guid "eventId", guid "investigationId", integer "aggregateVersion" json, text "eventType" json, text "occurredAt" json, guid "correlationId", Canonical.field "actor" json, Canonical.field "payload" json with
+            | Some eid, Some iid, Some v, Some kind, Some at, Some corr, Some actor, Some payload ->
+                Ok
+                    { EventId = EventId eid
+                      Investigation = InvestigationId iid
+                      Version = AggregateVersion v
+                      EventType = kind
+                      OccurredAt = at
+                      Actor = v1 actor
+                      CorrelationId = corr
+                      Payload = v1 payload }
+            | _ -> Error(MissingRequiredField(file, sprintf "line %d: an envelope field" index))
+
+    let private historyOf (bytes: byte[]) : Result<V1Event list, VerificationFailure list> =
+        let content = Text.Encoding.UTF8.GetString bytes
+
+        if content.Length = 0 || not (content.EndsWith('\n')) || content.Contains("\n\n", StringComparison.Ordinal) || content.StartsWith(char 0xFEFF) then
+            Error [ SchemaInvalid("events.ndjson", "not LF-terminated canonical lines without blanks or BOM") ]
+        else
+            let results = content.TrimEnd('\n').Split('\n') |> Array.toList |> List.mapi (fun i l -> eventOf (i + 1) l)
+
+            match results |> List.choose (function Error e -> Some e | Ok _ -> None) with
+            | [] -> Ok(List.choose Result.toOption results)
+            | errors -> Error errors
+
+    let private refusalFailure (refusal: V1Refusal) : VerificationFailure =
+        match refusal with
+        | V1SequenceInvalid(expected, found) -> ReplayRejected(NonContiguousVersion(expected, found))
+        | V1UnknownEventType kind -> ReplayRejected(UnknownEventKind kind)
+        | other -> ContractValueMismatch("replay", "a history the kernel admits", StorageV1Replay.refusalCode other)
+
+    let private mismatch field (expected: string) (actual: string) =
+        if expected = actual then [] else [ ContractValueMismatch(field, expected, actual) ]
+
+    /// Verify one case's file set as a reader would (causa-data v1.0.0 §11): the catalog's digests, canonical text,
+    /// the manifest's own fields, the F# kernel's replay (StorageV1Replay) to the catalog's expected state, and the
+    /// snapshot equal to the replayed projection. Every failure found is reported; any failure refuses the case.
+    let verifyCase (entry: CatalogEntry) (files: FileSet) : CatalogCase =
+        let idText = let (InvestigationId g) = entry.Investigation in g.ToString("D").ToLowerInvariant()
+        let manifest = canonicalDocument "manifest.json" files.Manifest
+        let snapshot = canonicalDocument "snapshot.json" files.Snapshot
+        let eventsDigest = Canonical.sha256Hex files.Events
+
+        let digestOf (doc: Result<Json * byte[], VerificationFailure>) =
+            doc |> Result.map (snd >> Canonical.sha256Hex) |> Result.defaultValue ""
+
+        let documentFailures =
+            [ manifest; snapshot ] |> List.choose (function Error f -> Some f | Ok _ -> None)
+
+        let digests =
+            [ if digestOf manifest <> entry.ManifestSha256 then DigestMismatch "manifestSha256"
+              if eventsDigest <> entry.EventsSha256 then DigestMismatch "eventsSha256"
+              if digestOf snapshot <> entry.SnapshotSha256 then DigestMismatch "snapshotSha256" ]
+
+        let manifestFields =
+            match manifest with
+            | Ok(json, _) ->
+                let field name = text name json |> Option.defaultValue "<missing>"
+
+                ([ "formatVersion"; "schemaVersion"; "semanticVersion" ] |> List.collect (fun f -> mismatch f "1.0.0" (field f)))
+                @ mismatch "investigationId" idText (field "investigationId")
+                @ mismatch "manifest.eventsSha256" eventsDigest (field "eventsSha256")
+                @ mismatch "manifest.snapshotSha256" (digestOf snapshot) (field "snapshotSha256")
+                @ mismatch "aggregateVersion" (string entry.ExpectedVersion) (integer "aggregateVersion" json |> Option.map string |> Option.defaultValue "<missing>")
+            | Error _ -> []
+
+        let replayed =
+            match historyOf files.Events with
+            | Error failures -> Error failures
+            | Ok history ->
+                match history |> List.tryFind (fun e -> e.Investigation <> entry.Investigation) with
+                | Some e -> Error [ ContractValueMismatch("investigationId", idText, sprintf "event at %A" e.Version) ]
+                | None -> StorageV1Replay.replay history |> Result.mapError (refusalFailure >> List.singleton)
+
+        let stateFailures, state =
+            match replayed with
+            | Error failures -> failures, None
+            | Ok state ->
+                let digest = StorageV1Replay.stateSha256 state
+                let (AggregateVersion version) = state.Version
+
+                let snapshotState =
+                    match snapshot with
+                    | Ok(json, _) ->
+                        match Canonical.field "state" json with
+                        | Some s when StorageV1Replay.sha256 (v1 s) = digest -> []
+                        | Some _ -> [ SnapshotDiffersFromReplay [ "state" ] ]
+                        | None -> [ MissingRequiredField("snapshot.json", "state") ]
+                    | Error _ -> []
+
+                mismatch "expectedStateSha256" entry.ExpectedStateSha256 digest
+                @ mismatch "expectedLifecycle" entry.ExpectedLifecycle state.Lifecycle
+                @ mismatch "expectedVersion" (string entry.ExpectedVersion) (string version)
+                @ snapshotState,
+                Some state
+
+        match documentFailures @ digests @ manifestFields @ stateFailures, state with
+        | [], Some state -> CaseLoaded(entry, state)
+        | [], None -> CaseRefused(entry, [ MissingRequiredField("events.ndjson", "history") ])
+        | failures, _ -> CaseRefused(entry, failures)
+
+    /// A case directory must lie inside the catalog's workspace: never a synthetic fixture directory (EXT-DATA-013-O2).
+    let private insideWorkspace (pointer: CatalogPointer) (entry: CatalogEntry) =
+        let idText = let (InvestigationId g) = entry.Investigation in g.ToString("D").ToLowerInvariant()
+        entry.Path = sprintf "%s/investigations/%s" pointer.Workspace idText
+
+    let private filePath (entry: CatalogEntry) (file: string) = RepoPath(entry.Path + "/" + file)
+
+    let start: CatalogLoad = ReadingHead
+
+    /// The next read for this state, or None when the load is finished. Queries only (EXT-DATA-006-O1).
+    let request (id: RequestId) (connection: ConnectionContext) (load: CatalogLoad) : HttpRequest option =
+        match load with
+        | ReadingHead -> Some(GitHubRequests.branchHead id connection)
+        | ReadingActive at -> Some(GitHubRequests.contentsAt id connection at activePath)
+        | ReadingManifest(at, pointer) -> Some(GitHubRequests.contentsAt id connection at pointer.Manifest)
+        | ReadingCase(at, _, entry, read, _, _) ->
+            caseFiles
+            |> List.tryFind (fun f -> read |> List.exists (fst >> (=) f) |> not)
+            |> Option.map (fun f -> GitHubRequests.contentsAt id connection at (filePath entry f))
+        | CatalogReady _
+        | CatalogFailed _ -> None
+
+    /// Start the next case, skipping (and refusing) every case outside the workspace; Ready when none remain.
+    let rec private nextCase at pointer (remaining: CatalogEntry list) (loaded: CatalogCase list) : CatalogLoad =
+        match remaining with
+        | [] -> CatalogReady { ReadAt = at; Pointer = pointer; Cases = List.rev loaded }
+        | entry :: rest when not (insideWorkspace pointer entry) ->
+            nextCase at pointer rest (CaseRefused(entry, [ ContractValueMismatch("path", pointer.Workspace + "/investigations/<id>", entry.Path) ]) :: loaded)
+        | entry :: rest -> ReadingCase(at, pointer, entry, [], rest, loaded)
+
+    let private contentsBytes (file: string) (outcome: HttpOutcome) : Result<byte[], CatalogFailure> =
+        match GitHubProvider.interpretContents outcome with
+        | ContentsBytes(_, bytes) -> Ok bytes
+        | ContentsTooLarge _ -> Error(CatalogMalformed(file, "over the contents API's 1 MB limit"))
+        | ContentsUnreadable error -> Error(CatalogUnreadable(file, error))
+
+    /// Interpret the answer to the state's read. A case whose file cannot be read is refused (fail closed per item);
+    /// the pointer or manifest unreadable fails the whole load (no catalog is shown, nothing partial).
+    let advance (load: CatalogLoad) (outcome: HttpOutcome) : CatalogLoad =
+        match load with
+        | ReadingHead ->
+            match (classify (Read "rest:ref") outcome).Result with
+            | Ok answer ->
+                match Answers.headOid answer.Body with
+                | Some at -> ReadingActive at
+                | None -> CatalogFailed(CatalogMalformed("ref", "the ref answer names no commit"))
+            | Error error -> CatalogFailed(CatalogUnreadable("ref", error))
+        | ReadingActive at ->
+            match contentsBytes "catalog/active.json" outcome |> Result.bind parsePointer with
+            | Ok pointer -> ReadingManifest(at, pointer)
+            | Error failure -> CatalogFailed failure
+        | ReadingManifest(at, pointer) ->
+            let (RepoPath file) = pointer.Manifest
+
+            match contentsBytes file outcome |> Result.bind (parseManifest file) with
+            | Ok entries -> nextCase at pointer entries []
+            | Error failure -> CatalogFailed failure
+        | ReadingCase(at, pointer, entry, read, remaining, loaded) ->
+            let file = caseFiles |> List.find (fun f -> read |> List.exists (fst >> (=) f) |> not)
+
+            match contentsBytes file outcome with
+            | Error(CatalogUnreadable(_, error)) ->
+                nextCase at pointer remaining (CaseRefused(entry, [ SchemaInvalid(file, sprintf "unreadable: %A" error) ]) :: loaded)
+            | Error(CatalogMalformed(_, detail)) -> nextCase at pointer remaining (CaseRefused(entry, [ SchemaInvalid(file, detail) ]) :: loaded)
+            | Ok bytes ->
+                let read = read @ [ file, bytes ]
+
+                match read with
+                | [ (_, m); (_, e); (_, s) ] ->
+                    nextCase at pointer remaining (verifyCase entry { Manifest = m; Events = e; Snapshot = s } :: loaded)
+                | _ -> ReadingCase(at, pointer, entry, read, remaining, loaded)
+        | CatalogReady _
+        | CatalogFailed _ -> load
+
+    /// The cases the engine may present: only those that verified and replayed (EXT-DATA-013-O2).
+    let loaded (catalog: Catalog) : (CatalogEntry * V1State) list =
+        catalog.Cases |> List.choose (function CaseLoaded(e, s) -> Some(e, s) | CaseRefused _ -> None)
+
+    /// The test/host edge: drive the load to completion through an Execute (Limen in the App), within a budget.
+    let run (nextId: unit -> RequestId) (execute: Execute) (connection: ConnectionContext) : CatalogLoad =
+        let rec go load budget =
+            match request (nextId ()) connection load with
+            | None -> load
+            | Some _ when budget = 0 -> CatalogFailed(CatalogMalformed("catalog", "the load did not finish within its read budget"))
+            | Some req -> go (advance load (execute req)) (budget - 1)
+
+        go start 64

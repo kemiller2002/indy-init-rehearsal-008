@@ -86,6 +86,55 @@ module Recordings =
         body["errors"] <- errors
         body.ToJsonString()
 
+    /// CR-T21-01: the error GitHub answers for `Commit.file(path:)` when the commit's tree has no such path. The type
+    /// and message are the text the live run printed; `path` names the aliased field that answered null (GraphQL's
+    /// standard error path). The stateful fake answers a missing path with exactly this entry (PF-013).
+    let missingPathError (responsePath: string list) (repoPath: string) : JsonObject =
+        let error = JsonObject()
+        error["type"] <- JsonValue.Create "NOT_FOUND"
+        let path = JsonArray()
+
+        for step in responsePath do
+            path.Add(JsonValue.Create step)
+
+        error["path"] <- path
+        error["message"] <- JsonValue.Create(sprintf "Could not resolve file for path '%s'." repoPath)
+        error
+
+    /// CR-T21-01: a file-set read (GitHubRequests.fileSetAtBranch) at a commit that holds none of the three files.
+    let missingFileSetBody (commit: string) (investigationDir: string) : string =
+        let target = JsonObject()
+        target["oid"] <- JsonValue.Create commit
+        let errors = JsonArray()
+
+        for slot, file in [ "manifest", "manifest.json"; "events", "events.ndjson"; "snapshot", "snapshot.json" ] do
+            target[slot] <- null
+            errors.Add(missingPathError [ "repository"; "ref"; "target"; slot ] (investigationDir + "/" + file))
+
+        let ref = JsonObject()
+        ref["target"] <- target
+        let repository = JsonObject()
+        repository["ref"] <- ref
+        let data = JsonObject()
+        data["repository"] <- repository
+        let body = JsonObject()
+        body["data"] <- data
+        body["errors"] <- errors
+        body.ToJsonString()
+
+    /// Read answers that are not refusals although they carry GraphQL errors. Kept out of `all` (whose consumers map
+    /// each operation to a context they know); the persistence producer tests classify these in their read context.
+    let readForms: Recording list =
+        [ { Name = "file-set-missing-paths"
+            MatrixClass = "ACCEPTED"
+            Operation = "graphql:fileSet"
+            Status = 200
+            Headers = [ "content-type", "application/json; charset=utf-8" ]
+            Body = missingFileSetBody oidA "investigations/0eeaba2f-d5a6-49df-b1ac-78da0a1e901c"
+            Provenance =
+              DocumentedForm
+                  "CR-T21-01: error type NOT_FOUND and the three messages as printed by the live run https://github.com/kemiller2002/indy-init-rehearsal-008/actions/runs/41340579555 (job 124949505640, PERSIST-043-O2); the run printed the messages, not the raw body, so the data/path shape is GraphQL's standard partial-answer form, not a capture" } ]
+
     /// The answer forms known before the CI probe has run. Each is DocumentedForm: a restatement, not a capture.
     let documentedForms: Recording list =
         let gql (errorType: string) (message: string) =

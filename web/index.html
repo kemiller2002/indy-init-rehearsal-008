@@ -9,6 +9,7 @@
   <title data-text="pageTitle">Causa</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23345' stroke-width='4'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23345'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./node_modules/@echelon-foundry/design-system/dist/all.css">
+  <link rel="stylesheet" href="./node_modules/@echelon-foundry/forma-workflow/dist/forma-workflow.css">
   <link rel="stylesheet" href="./causa.css">
   <script type="importmap">
     {
@@ -17,6 +18,7 @@
       }
     }
   </script>
+  <script type="module" src="./node_modules/@echelon-foundry/forma-workflow/dist/forma-workflow.js"></script>
   <script type="module" src="./boundary.js"></script>
 </head>
 <body>
@@ -123,6 +125,27 @@
               <li><ef-button><button type="button" data-event="submit.ResolveInvestigation">Resolve</button></ef-button>
                 <span class="causa-capability" data-causa-capability="ResolveInvestigation" data-text="capabilityResolveInvestigation"></span></li>
             </ul>
+            <!-- WI-R8-T23: the causal graph. Its content is the F# projection (Views/Graph.fs): the Forma workflow
+                 document in data-workflow, laid out by the existing engine (@echelon-foundry/forma-workflow), and the
+                 same nodes and relationships as text (ADRP-007, UI-002-O4). -->
+            <section class="causa-graph" aria-labelledby="causa-graph-heading" data-causa-region="graph" data-bind-data-projection-version="projectionVersion">
+              <h4 id="causa-graph-heading">Causal graph</h4>
+              <p data-causa-graph-summary data-text="graphSummary">No graph yet: start an investigation to see its entries.</p>
+              <figure class="causa-graph-figure" data-bind-hidden="graphFigureHidden" hidden>
+                <forma-workflow instance="causa-graph" mode="view" data-causa-graph data-bind-data-workflow="graphWorkflow">
+                  <p>Laying out the graph.</p>
+                </forma-workflow>
+                <figcaption>Laid out by the Forma workflow engine. Every relationship is also listed below.</figcaption>
+              </figure>
+              <h5 id="causa-graph-relationships-heading">Relationships (<span data-text="graphRelationshipCount">0</span>)</h5>
+              <ul class="causa-graph-list" data-causa-graph-relationships aria-labelledby="causa-graph-relationships-heading">
+                <template data-each="graphRelationships" data-key="key"><li data-text="text"></li></template>
+              </ul>
+              <h5 id="causa-graph-nodes-heading">Entries (<span data-text="graphNodeCount">0</span>)</h5>
+              <ul class="causa-graph-list" data-causa-graph-nodes aria-labelledby="causa-graph-nodes-heading">
+                <template data-each="graphNodes" data-key="key"><li><span data-text="label"></span> (<span data-text="role"></span>): <span data-text="provenance"></span></li></template>
+              </ul>
+            </section>
           </section>
         </section>
         <section aria-labelledby="causa-investigation-heading" data-bind-hidden="screenInvestigationHidden" hidden>
