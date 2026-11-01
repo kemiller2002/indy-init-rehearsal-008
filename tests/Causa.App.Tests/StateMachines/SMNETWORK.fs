@@ -192,3 +192,57 @@ module SMNETWORK =
                 | None -> Assert.Equal(System.Text.Json.JsonValueKind.Null, e.GetProperty("expectedVersion").ValueKind)
                 | Some(AggregateVersion v) -> Assert.Equal(v, e.GetProperty("expectedVersion").GetInt64())
         | other -> failwithf "Export should download, got %A" other
+
+    // WI-R8-EXPVER (T32, review F-03): a command recorded on a saved/opened investigation is held, and exported, with
+    // the aggregate version it was decided on: the confirmed base evolved by the commands before it, never null.
+    let private opened (config: AppEngine.Config) n : VerifiedInvestigation =
+        let history = Create.firstHistory config (id n) (Guid "00000000-0000-4000-8000-0000000000c1")
+
+        match Kernel.replay history with
+        | Ok investigation ->
+            { Investigation = investigation
+              History = history
+              ReadAt = CommitOid(String('c', 40))
+              Bytes = { Manifest = [||]; Events = [||]; Snapshot = [||] } }
+        | Error error -> failwithf "the first history should replay: %A" error
+
+    [<Fact>]
+    let ``F-03 a command on a saved investigation carries the version it was decided on, and Export writes it`` () =
+        let config = AppEngine.configFor tab
+        let verified = opened config 4
+        let engine = AppEngine.create config
+
+        let before =
+            { model NetworkState.Online [ session 4 (SaveState.Saved(VerifiedAt verified)) ] with
+                Loads = Map.ofList [ id 4, Loaded verified ] }
+
+        let bare n : CommandEnvelope =
+            { CommandId = Guid(sprintf "00000000-0000-4000-8000-%012d" (400 + n)); Investigation = id 4; ExpectedVersion = None }
+
+        let afterFirst, _ = engine.Update (DomainCommand(bare 1)) before
+        let afterSecond, _ = engine.Update (DomainCommand(bare 2)) afterFirst
+        let held = AppEngine.unconfirmed afterSecond.Sessions[id 4]
+        Assert.Equal(2, held.Length)
+
+        // The first is decided on the confirmed base; the second on the base evolved by the first (the kernel's own
+        // decision of the held commands, in order, is the reference).
+        Assert.Equal(Some verified.Investigation.Version, held[0].ExpectedVersion)
+        let _, _, evolved = AppEngine.decideAll config (verified.History, Some verified.Investigation) [ held[0] ]
+        Assert.Equal(evolved |> Option.map _.Version, held[1].ExpectedVersion)
+        Assert.NotEqual(held[0].ExpectedVersion, held[1].ExpectedVersion)
+
+        // Both are accepted by the kernel at that base exactly as held (no version conflict).
+        let reapplied, _, _ = AppEngine.decideAll config (verified.History, Some verified.Investigation) held
+        Assert.Equal(2, reapplied.Accepted.Length)
+        Assert.Empty(reapplied.Refused)
+
+        match Update.hostEffect (ExportCommands held) with
+        | Download(_, body) ->
+            use doc = System.Text.Json.JsonDocument.Parse body
+            let exported = doc.RootElement.GetProperty("commands").EnumerateArray() |> List.ofSeq
+
+            for c, e in List.zip held exported do
+                Assert.Equal(System.Text.Json.JsonValueKind.Number, e.GetProperty("expectedVersion").ValueKind)
+                let (AggregateVersion v) = Option.get c.ExpectedVersion
+                Assert.Equal(v, e.GetProperty("expectedVersion").GetInt64())
+        | other -> failwithf "Export should download, got %A" other

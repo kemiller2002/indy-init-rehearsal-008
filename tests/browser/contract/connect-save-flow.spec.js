@@ -345,7 +345,8 @@ test("Export on an unresolvable conflict downloads the unsaved commands", async 
   for await (const chunk of await download.createReadStream()) chunks.push(chunk);
   const exported = JSON.parse(Buffer.concat(chunks).toString("utf8"));
   // Review F-03 (PR #37): each unsaved command is exported as its frozen CommandEnvelope (identity, investigation and
-  // the version it was decided on, JSON null when none), in order.
+  // the version it was decided on), in order. T32 (WI-R8-EXPVER): an observation recorded after Create saved is
+  // decided on the saved investigation, so its expected version is that aggregate version, never null.
   const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
   expect(exported.format).toBe("causa-unsaved-commands/1");
   expect(exported.commands).toHaveLength(1);
@@ -353,7 +354,8 @@ test("Export on an unresolvable conflict downloads the unsaved commands", async 
   expect(Object.keys(command).sort()).toEqual(["commandId", "expectedVersion", "investigation"]);
   expect(command.commandId).toMatch(uuid);
   expect(command.investigation).toMatch(uuid);
-  expect(command.expectedVersion === null || Number.isInteger(command.expectedVersion)).toBe(true);
+  expect(Number.isInteger(command.expectedVersion)).toBe(true);
+  expect(command.expectedVersion).toBeGreaterThanOrEqual(1);
   await expect(page.locator("[data-causa-investigation-notice]")).toHaveText("Your unsaved changes were downloaded.");
   expect(github.commits()).toHaveLength(commitsBefore);
   expect(failures).toEqual([]);
