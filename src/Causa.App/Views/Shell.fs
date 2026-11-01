@@ -110,8 +110,36 @@ module Shell =
                 + "Hidden"
             key, Bit(id <> shown))
 
-    /// Pure: the shell's complete projection for one route.
-    let project (route: AppRoute) : ShellKeys =
+    /// An investigation link this tab has not loaded (UI-010-O2, UI-013-O4): what happened, what is preserved and
+    /// the one safe next step the connection allows (SM-CONNECTION). Total over ConnectionState; a link without a
+    /// repository has nothing to load, so its next step is back to Investigations.
+    let recoveryKeys (connection: ConnectionState) (route: AppRoute) : ShellKeys =
+        let preserved = "Nothing has changed. Unsaved changes are kept only in this tab's memory."
+
+        let detail, action =
+            match route, connection with
+            | AppRoute.Investigation(_, None, _), _ ->
+                $"This link does not name the repository that holds the investigation. {preserved}",
+                Some("Open Investigations", Routes.format AppRoute.Home)
+            | AppRoute.Investigation(_, Some repository, _), (Disconnected | CredentialRefused) ->
+                $"Connect {repository} to open it. {preserved}", Some("Connect data repository", Routes.format AppRoute.Home)
+            | AppRoute.Investigation(_, Some repository, _), Reauthenticating ->
+                $"The connection to {repository} needs to be renewed before it can open. {preserved}",
+                Some("Connect data repository again", Routes.format AppRoute.Home)
+            | AppRoute.Investigation(_, Some repository, _), Connecting _ ->
+                $"Connecting to {repository}; the investigation can be opened once the connection is ready. {preserved}", None
+            | AppRoute.Investigation(_, Some _, _), Connected _ ->
+                $"The repository is connected; open the investigation from its list. {preserved}",
+                Some("Open Investigations", Routes.format AppRoute.Home)
+            | _ -> "", None
+
+        [ "unloadedDetail", Str detail
+          "unloadedActionHidden", Bit action.IsNone
+          "unloadedActionLabel", Str(action |> Option.map fst |> Option.defaultValue "")
+          "unloadedActionHref", Str(action |> Option.map snd |> Option.defaultValue (Routes.format AppRoute.Home)) ]
+
+    /// Pure: the keys that depend on the route alone.
+    let private routeKeys (route: AppRoute) : ShellKeys =
         [ "screen", Str(screenId route)
           "screenTitle", Str(screenTitle route)
           "pageTitle", Str(pageTitle route)
@@ -121,6 +149,14 @@ module Shell =
         @ secondaryKeys route
         @ contextKeys route
         @ screenKeys route
+
+    /// Pure: the shell's complete projection for one route and what the shell knows of the connection.
+    let projectWith (connection: ConnectionState) (route: AppRoute) : ShellKeys =
+        routeKeys route @ recoveryKeys connection route
+
+    /// Pure: the shell's complete projection for one route. The shell this build composes (View.fs) holds no
+    /// connection yet, so it is Disconnected, which the header also shows ("Not connected").
+    let project (route: AppRoute) : ShellKeys = projectWith Disconnected route
 
     /// Pure: the projection for a Limen location hash.
     let projectHash (hash: string) : ShellKeys = project (Routes.parse hash)

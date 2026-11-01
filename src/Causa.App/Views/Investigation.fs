@@ -30,36 +30,17 @@ module Investigation =
                 { State = Some state
                   Capabilities = Capabilities.derive policy actor (Some state)
                   Fault = None }
-            | Error error ->
+            | Error _ ->
+                // Fail closed (UI-010-O4) in plain words; the replay error itself is technical detail (UI-024-O5).
                 { State = None
                   Capabilities = []
-                  Fault = Some(sprintf "The history does not replay: %A" error) }
+                  Fault = Some "This investigation's history could not be read, so none of it is shown. Nothing was changed." }
 
-    let lifecycleName (lifecycle: InvestigationLifecycle) =
-        match lifecycle with
-        | Draft -> "Draft"
-        | Active -> "Active"
-        | AwaitingEvidence -> "Awaiting evidence"
-        | AwaitingVerification -> "Awaiting verification"
-        | Resolved -> "Resolved"
-        | Closed -> "Closed"
-        | Archived -> "Archived"
+    /// The status and command words come from the one presentation-language mapping (UI-024-O1).
+    let lifecycleName = PresentationLanguage.lifecycleName
 
     /// A command in the words a person reads (no state-machine vocabulary, R9.4).
-    let commandLabel (command: Command) =
-        match command with
-        | StartInvestigation -> "Start investigation"
-        | RenameInvestigation -> "Rename"
-        | ActivateInvestigation -> "Activate"
-        | MarkAwaitingEvidence -> "Mark awaiting evidence"
-        | MarkAwaitingVerification -> "Mark awaiting verification"
-        | ResolveInvestigation -> "Resolve"
-        | CloseInvestigation -> "Close"
-        | ReopenInvestigation -> "Reopen"
-        | ArchiveInvestigation -> "Archive"
-        | RecordObservation -> "Record an observation"
-        | Command.RecordHypothesis -> "Record a hypothesis"
-        | RecordConclusion -> "Record a conclusion"
+    let commandLabel = PresentationLanguage.commandLabel
 
     let private kindOf (event: EventEnvelope) =
         let (EventPayload kind) = event.Payload
@@ -67,19 +48,12 @@ module Investigation =
 
     let private versionNumber (AggregateVersion v) = v
 
-    let private blockerText (blockers: Blocker list) =
-        blockers |> List.map (fun b -> $"{b.Message} ({b.Code})") |> String.concat " "
+    let private lifecycleOf (projection: Projection) = projection.State |> Option.map _.Lifecycle
 
-    /// Pure: a refused decision as the sentence the page shows, with the kernel's reason.
-    let refusalText (decision: Decision) =
-        match decision with
-        | Allowed _ -> "Allowed."
-        | Blocked blockers -> blockerText blockers
-        | RequiresReview reasons -> "Needs review: " + String.concat " " reasons
-        | UnsupportedSemantics names -> "Unsupported semantics: " + String.concat ", " names
-        | Conflict(AggregateVersion e, AggregateVersion a) ->
-            $"The investigation changed: expected version {e}, found version {a} (version-conflict)."
-        | Duplicate _ -> "This command was already applied (duplicate)."
+    /// Pure: a refused decision as the sentence the page shows, in plain language (UI-024-O5); the kernel's codes
+    /// stay data (PresentationLanguage.decisionCodes).
+    let refusalText (command: Command) (lifecycle: InvestigationLifecycle option) (decision: Decision) =
+        PresentationLanguage.refusalReason command lifecycle decision
 
     let private str (s: string) = Str s
     let private num (n: int64) = Str(string n)
@@ -104,7 +78,8 @@ module Investigation =
     let private capabilityText (projection: Projection) (command: Command) =
         match availability projection command with
         | Some Available -> "Available"
-        | Some(Unavailable blockers) -> "Unavailable: " + blockerText blockers
+        | Some(Unavailable blockers) ->
+            "Unavailable: " + PresentationLanguage.blockerReasons command (lifecycleOf projection) blockers
         | None -> "Unavailable: the investigation could not be read."
 
     /// One key per command: "Available", or the kernel's reason it is not (discoverable, never hidden: section 19).
@@ -127,6 +102,8 @@ module Investigation =
         let available = progress |> List.filter (fun c -> availability projection c = Some Available)
         let resolve = availability projection ResolveInvestigation
 
+        let reasons = PresentationLanguage.blockerReasons ResolveInvestigation (lifecycleOf projection)
+
         let blockers =
             match resolve with
             | Some(Unavailable bs) -> bs
@@ -139,13 +116,20 @@ module Investigation =
               | cs -> cs |> List.map commandLabel |> String.concat ", "
           )
           "blockerCount", num (int64 blockers.Length)
-          "blockerList", str (if blockers.IsEmpty then "Nothing blocks resolving this investigation." else blockerText blockers)
+          "blockerList",
+          str (
+              if blockers.IsEmpty then
+                  "Nothing blocks resolving this investigation."
+              else
+                  reasons blockers
+          )
+          "blockerCodes", str (PresentationLanguage.blockerCodes blockers)
           // Conclusion review (section 23): whether the investigation can be resolved, with the kernel's gate.
           "conclusionReview",
           str (
               match resolve with
               | Some Available -> "Resolve is available: the policy gates are met."
-              | Some(Unavailable bs) -> $"Resolve is unavailable: {blockerText bs}"
+              | Some(Unavailable bs) -> $"Resolve is unavailable: {reasons bs}"
               | None -> "Resolve is unavailable: the investigation could not be read."
           ) ]
 
@@ -174,16 +158,19 @@ module Investigation =
               "inspectorCause", str cause
               "lastChange", str $"{kindOf e} at version {versionNumber e.Version}" ]
 
-    let private outcomeKeys (last: SubmitOutcome option) : ShellKeys =
-        let state, text =
+    /// The last answer in plain language (UI-024-O5): what was asked, in the page's words, and the reason it was
+    /// refused. The kernel's codes are data only (outcomeCodes), never the visible sentence.
+    let private outcomeKeys (projection: Projection) (last: SubmitOutcome option) : ShellKeys =
+        let state, text, codes =
             match last with
-            | None -> "none", "No command sent yet."
-            | Some(CommandAccepted(command, events)) ->
-                let kinds = events |> List.map kindOf |> String.concat ", "
-                "accepted", $"{Command.name command} accepted: {kinds}."
-            | Some(CommandRefused(command, decision)) -> "refused", $"{Command.name command} refused: {refusalText decision}"
+            | None -> "none", "No command sent yet.", ""
+            | Some(CommandAccepted(command, _)) -> "accepted", $"{commandLabel command}: done.", ""
+            | Some(CommandRefused(command, decision)) ->
+                "refused",
+                $"{commandLabel command} was not done: {refusalText command (lifecycleOf projection) decision}",
+                PresentationLanguage.decisionCodes decision
 
-        [ "outcomeState", str state; "outcomeText", str text ]
+        [ "outcomeState", str state; "outcomeText", str text; "outcomeCodes", str codes ]
 
     let private stateKeys (projection: Projection) (history: EventEnvelope list) : ShellKeys =
         [ "projectionVersion", num (versionOf projection)
@@ -234,5 +221,5 @@ module Investigation =
         @ capabilityKeys projection
         @ nextKeys projection
         @ inspectorKeys history
-        @ outcomeKeys last
+        @ outcomeKeys projection last
         @ visibilityKeys tab
