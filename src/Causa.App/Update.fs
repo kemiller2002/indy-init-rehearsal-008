@@ -215,6 +215,17 @@ module AppEngine =
 
         reapplied, finalHistory, finalState
 
+    /// Pure (review F-03, T32): a new command for a wired investigation stamped with the aggregate version it is
+    /// decided on, the confirmed base evolved by the session's unconfirmed commands. The session holds the envelope
+    /// as stamped, so Export writes that version. No confirmed base (not a wired investigation): unchanged.
+    let decidedOn (config: Config) (model: Model) (envelope: CommandEnvelope) : CommandEnvelope =
+        match baseOf model envelope.Investigation with
+        | Some opened ->
+            let pending = model.Sessions |> Map.tryFind envelope.Investigation |> Option.map unconfirmed |> Option.defaultValue []
+            let _, _, state = decideAll config (opened.History, Some opened.Investigation) pending
+            { envelope with ExpectedVersion = state |> Option.map _.Version }
+        | None -> envelope
+
     /// The file set a save writes: the confirmed base plus the kernel's events for the in-flight commands, encoded
     /// with causa-storage v1.0.0 (GitHubProvider.fileSetOf). Without a base (never in a wired tab) the stand-in.
     let private fileSetFor (config: Config) (model: Model) (session: InvestigationSession) : FileSet =
@@ -505,7 +516,7 @@ module AppEngine =
              | SessionInput(id, input) -> sessionStep config id input model
              | ConflictStep(id, input) -> conflictStep config id input model
              | LoadStep(id, input) -> loadStep config id input model
-             | DomainCommand envelope -> sessionStep config envelope.Investigation (SaveInput.Edit envelope) model
+             | DomainCommand envelope -> sessionStep config envelope.Investigation (SaveInput.Edit(decidedOn config model envelope)) model
              | Browser(ConnectivityChanged online) ->
                  match NetworkMachine.observe model.Network online with
                  | Some input -> networkStep config input model
