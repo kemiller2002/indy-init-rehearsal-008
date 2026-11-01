@@ -281,3 +281,27 @@ let ``T32W without a known body decideAll keeps the bare-envelope meaning`` () =
     Assert.Equal<CommandEnvelope list>(commands, reapplied.Accepted)
     // Kernel.bareCommand on an existing investigation is RecordObservation.
     Assert.Equal<string list>([ "InvestigationStarted"; "ObservationRecorded"; "ObservationRecorded" ], Wired.kinds history)
+
+[<Fact>]
+let ``T33-F-07 a disconnect that fails closed keeps the bodies; a confirmed disconnect drops them with the sessions`` () =
+    let pressed = Wired.press [ "submit.RecordObservation"; "submit.ActivateInvestigation" ]
+    let disconnect (tab: Tab) = fst (Program.stepTab System.Guid.NewGuid tab (Incoming.Event("connect.disconnect", None)))
+
+    // Reauthenticating: SM-CONNECTION refuses DisconnectConfirmed, so the sessions keep their commands and the tab
+    // keeps every body; the held commands are still decided as Activate, not as observations.
+    let reauthenticating = { pressed with Engine = { pressed.Engine with Connection = Reauthenticating } }
+    let failed = disconnect reauthenticating
+    let held = AppEngine.unconfirmed failed.Engine.Sessions[Wired.investigation]
+    Assert.Equal(2, held.Length)
+    Assert.Equal<Map<System.Guid, Command>>(pressed.Commands, failed.Commands)
+
+    let _, history, _ =
+        AppEngine.decideAllWith (Program.configOf failed).CommandBody (Program.configOf failed) (Wired.opened.History, Some Wired.opened.Investigation) held
+
+    Assert.Equal<string list>([ "InvestigationStarted"; "ObservationRecorded"; "InvestigationActivated" ], Wired.kinds history)
+
+    // Connected: the engine drops the sessions, and with them the bodies.
+    let confirmed = disconnect pressed
+    Assert.Empty(confirmed.Engine.Sessions)
+    Assert.Empty(confirmed.Commands)
+    Assert.Equal(None, confirmed.Active)

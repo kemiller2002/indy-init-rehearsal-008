@@ -297,6 +297,13 @@ module Program =
     let configOf (tab: Tab) : AppEngine.Config =
         { config with CommandBody = fun id -> Map.tryFind id tab.Commands }
 
+    /// WI-R8-T32W / T33-F-07: the bodies of the commands the engine's sessions still hold (unconfirmed), nothing else.
+    let retained (tab: Tab) : Map<Guid, Command> =
+        let held =
+            tab.Engine.Sessions |> Map.toList |> List.collect (snd >> AppEngine.unconfirmed) |> List.map _.CommandId |> Set.ofList
+
+        tab.Commands |> Map.filter (fun id _ -> held.Contains id)
+
     let private run (tab: Tab) (msg: Msg) =
         let model, effects = AppEngine.update (configOf tab) msg tab.Engine
         { tab with Engine = model }, effects
@@ -327,7 +334,13 @@ module Program =
             | Some credential -> run { tab with Token = "" } (Connection(ConnectionInput.ReconnectSubmitted credential))
             | None -> tab, []
         | "connect.disconnect" ->
-            run { tab with Active = None; Creation = None; Commands = Map.empty } (Connection ConnectionInput.DisconnectConfirmed)
+            // T33-F-07: the engine decides the disconnect first; only bodies of commands no remaining session holds
+            // are dropped, so a disconnect that fails closed (Connecting, Reauthenticating) keeps every body.
+            let disconnected, effects = run tab (Connection ConnectionInput.DisconnectConfirmed)
+
+            match disconnected.Engine.Context with
+            | None -> { disconnected with Active = None; Creation = None; Commands = retained disconnected }, effects
+            | Some _ -> disconnected, effects
         | "investigation.id" -> { tab with InvestigationText = v }, []
         | "investigation.open" ->
             match investigationOf tab.InvestigationText with
