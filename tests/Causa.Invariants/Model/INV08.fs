@@ -36,7 +36,7 @@ module Bindings =
     /// The view projections (IF41-VIEW), ui.
     let projections: Projections option = Some Projection.value
     /// The App engine (IF41-APP), ui.
-    let engine: Engine option = None
+    let engine: Engine option = Some AppEngine.engine
     /// The stateful GitHub fake (tests/Causa.TestSupport/StatefulFake.fs), persistence: a fresh fake per call.
     let statefulFake: (unit -> FakeGitHub) option =
         Some(fun () ->

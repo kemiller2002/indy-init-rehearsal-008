@@ -83,3 +83,41 @@ module ConflictReview =
               "conflictDiscardHidden", Bit true
               "conflictExportHidden", Bit true
               "conflictRetryHidden", Bit true ]
+
+/// WI-R8-T22B: the persistence keys of a wired tab, from the engine's Model (IF41-APP) through the IF41-VIEW
+/// projections: the save indicator and conflict review of the displayed investigation, the workspace header, and the
+/// Connect form's state. The credential is never a key (CredentialNeverRendered).
+module EngineView =
+    let private loadText (load: LoadState option) =
+        match load with
+        | None
+        | Some NotLoaded -> ""
+        | Some(Loading _) -> "Reading the investigation from GitHub."
+        | Some(Loaded _) -> ""
+        | Some(LoadFailed(ProviderFailed error)) -> "The investigation could not be opened: " + ProviderMessage.ofError error
+        | Some(LoadFailed(Unverifiable _)) -> "The investigation's files on GitHub do not verify; nothing was loaded."
+        | Some UnavailableOffline -> "Offline: the investigation cannot be read until the connection returns."
+
+    let keys (model: Model) (active: InvestigationId option) (notice: string) : ShellKeys =
+        let session = active |> Option.bind (fun id -> Map.tryFind id model.Sessions)
+        let load = active |> Option.bind (fun id -> Map.tryFind id model.Loads)
+
+        let connected =
+            match model.Connection with
+            | Connected _ -> true
+            | _ -> false
+
+        let confirmingDiscard =
+            match session |> Option.map _.State with
+            | Some(SaveState.Conflict(ConfirmingDiscard _)) -> true
+            | _ -> false
+
+        SaveIndicator.keys (session |> Option.map Projection.value.SaveIndicator)
+        @ WorkspaceHeader.keys (Projection.value.Header model)
+        @ ConflictReview.keys session
+        @ [ "connectionStatus", Str(ConnectionMachine.label model.Connection)
+            "connectFormHidden", Bit connected
+            "investigationFormHidden", Bit(not connected)
+            "reconnectFormHidden", Bit(model.Connection <> CredentialRefused)
+            "conflictConfirmDiscardHidden", Bit(not confirmingDiscard)
+            "investigationNotice", Str(if notice <> "" then notice else loadText load) ]
