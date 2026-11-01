@@ -94,6 +94,36 @@
         <section aria-labelledby="causa-start-heading" data-bind-hidden="screenInvestigationStartHidden" hidden>
           <h2 id="causa-start-heading">New investigation</h2>
           <p>Connect a repository to save a new investigation.</p>
+          <!-- WI-R8-T17: each button sends a typed command through Limen to the F# engine; the domain kernel decides
+               it. Every region below reads the same projection (data-projection-version, ADRP-004). -->
+          <section class="causa-workspace" aria-labelledby="causa-workspace-heading" data-causa-workspace>
+            <h3 id="causa-workspace-heading">Investigation in this tab</h3>
+            <p class="causa-unsaved">Not saved. This investigation exists only in this tab until a repository is connected.</p>
+            <dl class="causa-projection" data-causa-region="summary" data-bind-data-projection-version="projectionVersion">
+              <div><dt>State</dt><dd data-text="investigationLifecycle" data-causa-lifecycle>No investigation</dd></div>
+              <div><dt>Version</dt><dd data-text="projectionVersion" data-causa-version>0</dd></div>
+              <div><dt>Observations</dt><dd data-text="observationCount">0</dd></div>
+              <div><dt>Conclusions</dt><dd data-text="conclusionCount">0</dd></div>
+            </dl>
+            <p class="causa-timeline-summary" data-causa-region="timeline" data-bind-data-projection-version="projectionVersion">
+              Timeline: <span data-text="timelineCount" data-causa-timeline-count>0</span> events; latest
+              <span data-text="timelineLatest" data-causa-timeline-latest>No events</span>.
+            </p>
+            <p class="causa-outcome" role="status" aria-live="polite" data-causa-outcome data-bind-data-outcome="outcomeState" data-text="outcomeText">No command sent yet.</p>
+            <p role="alert" data-bind-hidden="projectionFaultHidden" data-text="projectionFault" hidden></p>
+            <ul class="causa-commands" data-causa-region="capabilities" data-bind-data-projection-version="projectionVersion">
+              <li><ef-button><button type="button" data-event="submit.StartInvestigation">Start investigation</button></ef-button>
+                <span class="causa-capability" data-causa-capability="StartInvestigation" data-text="capabilityStartInvestigation"></span></li>
+              <li><ef-button><button type="button" data-event="submit.RecordObservation">Record an observation</button></ef-button>
+                <span class="causa-capability" data-causa-capability="RecordObservation" data-text="capabilityRecordObservation"></span></li>
+              <li><ef-button><button type="button" data-event="submit.ActivateInvestigation">Activate</button></ef-button>
+                <span class="causa-capability" data-causa-capability="ActivateInvestigation" data-text="capabilityActivateInvestigation"></span></li>
+              <li><ef-button><button type="button" data-event="submit.RecordConclusion">Record a conclusion</button></ef-button>
+                <span class="causa-capability" data-causa-capability="RecordConclusion" data-text="capabilityRecordConclusion"></span></li>
+              <li><ef-button><button type="button" data-event="submit.ResolveInvestigation">Resolve</button></ef-button>
+                <span class="causa-capability" data-causa-capability="ResolveInvestigation" data-text="capabilityResolveInvestigation"></span></li>
+            </ul>
+          </section>
         </section>
         <section aria-labelledby="causa-investigation-heading" data-bind-hidden="screenInvestigationHidden" hidden>
           <h2 id="causa-investigation-heading">Investigation</h2>
