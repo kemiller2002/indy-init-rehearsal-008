@@ -74,10 +74,30 @@ export const followWorkflows = (doc) => {
   doc.defaultView.customElements.whenDefined("forma-workflow").then(feedAll);
 };
 
+/**
+ * WI-R8-T26: the report's print export. "Print or save as PDF" opens the browser's print dialog, where Folio's print
+ * stylesheet lays out the engine-projected report; every print (the button or the browser's own command) stamps the
+ * report's generation time first (UI-009-O2). Nothing here decides report content.
+ */
+export const followPrint = (doc) => {
+  const view = doc.defaultView;
+  const stamp = () =>
+    doc.querySelectorAll("[data-causa-report-generated]").forEach((element) => {
+      element.textContent = new Date().toISOString();
+    });
+  view.addEventListener("beforeprint", stamp);
+  doc.addEventListener("click", (event) => {
+    if (!event.target.closest?.("[data-causa-print]")) return;
+    stamp();
+    view.print();
+  });
+};
+
 /** Boots the page: loading shell, then the engine through Limen, then handoff or failure. */
 export const boot = async (doc = document, startEngine = startDotnetEngine) => {
   show(doc, "loading");
   followWorkflows(doc);
+  followPrint(doc);
   doc.querySelector("[data-causa-retry]")?.addEventListener("click", () => doc.defaultView?.location.reload());
   let ready = false;
   let started = null;

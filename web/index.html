@@ -10,6 +10,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%23345' stroke-width='4'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23345'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./node_modules/@echelon-foundry/design-system/dist/all.css">
   <link rel="stylesheet" href="./node_modules/@echelon-foundry/forma-workflow/dist/forma-workflow.css">
+  <link rel="stylesheet" media="print" href="./node_modules/@echelon-foundry/print-components/src/styles/print.css">
   <link rel="stylesheet" href="./causa.css">
   <script type="importmap">
     {
@@ -19,6 +20,7 @@
     }
   </script>
   <script type="module" src="./node_modules/@echelon-foundry/forma-workflow/dist/forma-workflow.js"></script>
+  <script type="module" src="./node_modules/@echelon-foundry/print-components/src/components/register.js"></script>
   <script type="module" src="./boundary.js"></script>
 </head>
 <body>
@@ -231,6 +233,46 @@
               <ul class="causa-graph-list" data-causa-graph-nodes aria-labelledby="causa-graph-nodes-heading">
                 <template data-each="graphNodes" data-key="key"><li><span data-text="label"></span> (<span data-text="role"></span>): <span data-text="provenance"></span></li></template>
               </ul>
+            </section>
+            <!-- WI-R8-T26: the report preview (S22) and its print export through Folio's print components
+                 (@echelon-foundry/print-components). Its content is the F# projection (Views/Report.fs): only what
+                 the kernel records; every section it does not record says so (R12.2, R12.3, UI-009-O4). -->
+            <section class="causa-report" aria-labelledby="causa-report-heading" data-causa-region="report" data-bind-data-projection-version="projectionVersion">
+              <h4 id="causa-report-heading">Report preview</h4>
+              <p data-causa-report-summary data-text="reportSummary">No report yet: start an investigation to preview its report.</p>
+              <p class="causa-report-actions" data-bind-hidden="reportHidden" hidden>
+                <ef-button><button type="button" data-causa-print>Print or save as PDF</button></ef-button>
+              </p>
+              <ef-print-document class="causa-report-document" data-causa-report data-bind-data-report-kind="reportKindState" data-bind-hidden="reportHidden" hidden>
+                <header class="causa-report-title">
+                  <p class="causa-report-kind" data-causa-report-kind data-text="reportKind">No report</p>
+                  <h5 data-causa-report-title data-text="reportTitle">No report yet</h5>
+                  <dl class="causa-report-meta">
+                    <div><dt>Investigation</dt><dd data-causa-report-investigation data-text="reportInvestigation"></dd></div>
+                    <div><dt>Event version</dt><dd data-causa-report-version data-text="reportVersion">0</dd></div>
+                    <div><dt>Lifecycle</dt><dd data-causa-report-lifecycle data-text="reportLifecycle">No investigation</dd></div>
+                    <div><dt>Generated</dt><dd data-causa-report-generated>When printed</dd></div>
+                  </dl>
+                </header>
+                <ef-print-callout data-causa-report-unresolved>
+                  <h6 id="causa-report-unresolved-heading">Unresolved work</h6>
+                  <ul aria-labelledby="causa-report-unresolved-heading">
+                    <template data-each="reportUnresolved" data-key="key"><li data-text="text"></li></template>
+                  </ul>
+                </ef-print-callout>
+                <div data-causa-report-sections>
+                  <template data-each="reportSections" data-key="key"><ef-print-section data-causa-report-section data-bind-data-recorded="recorded"><h6 data-text="heading"></h6><p data-text="body"></p><ef-print-note><p data-text="provenance"></p></ef-print-note></ef-print-section></template>
+                </div>
+                <ef-print-table data-causa-report-chronology>
+                  <table>
+                    <caption>Chronology</caption>
+                    <thead><tr><th scope="col">Version</th><th scope="col">Event</th><th scope="col">Event id</th></tr></thead>
+                    <tbody>
+                      <template data-each="reportChronology" data-key="key"><tr><td data-text="version"></td><td data-text="kind"></td><td data-text="event"></td></tr></template>
+                    </tbody>
+                  </table>
+                </ef-print-table>
+              </ef-print-document>
             </section>
             <!-- WI-R8-T22: S23 conflict review (Forma conflict review), shown only when SM-SAVE is in Conflict. -->
             <section class="ef-conflict-review" aria-labelledby="causa-conflict-heading" data-causa-conflict-review data-bind-hidden="conflictReviewHidden" hidden>
