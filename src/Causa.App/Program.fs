@@ -9,9 +9,9 @@ open System.Text.Json
 /// The Limen messages the engine answers (BrowserToEngineMessage), decoded to data.
 [<RequireQualifiedAccess>]
 type Incoming =
-    | Initialize of path: string
+    | Initialize of path: string * hash: string
     | Event of name: string * value: string option
-    | LocationChanged of path: string
+    | LocationChanged of path: string * hash: string
     | EffectResult
     | CapabilityFact
     | Unreadable of reason: string
@@ -36,14 +36,21 @@ module Program =
     let private pathOf (location: JsonElement option) =
         location |> Option.bind (tryString "path") |> Option.defaultValue "/"
 
+    let private hashOf (location: JsonElement option) =
+        location |> Option.bind (tryString "hash") |> Option.defaultValue ""
+
     /// Pure: one JSON message to Incoming. Never throws.
     let decode (json: string) : Incoming =
         try
             use doc = JsonDocument.Parse json
             let root = doc.RootElement
             match tryString "kind" root with
-            | Some "Initialize" -> Incoming.Initialize(pathOf (tryProp "location" root))
-            | Some "LocationChanged" -> Incoming.LocationChanged(pathOf (tryProp "location" root))
+            | Some "Initialize" ->
+                let location = tryProp "location" root
+                Incoming.Initialize(pathOf location, hashOf location)
+            | Some "LocationChanged" ->
+                let location = tryProp "location" root
+                Incoming.LocationChanged(pathOf location, hashOf location)
             | Some "Event" ->
                 let ev = tryProp "event" root
                 let name = ev |> Option.bind (tryString "name") |> Option.defaultValue ""
@@ -59,8 +66,12 @@ module Program =
     let step (state: ShellState) (message: Incoming) : ShellState * Outgoing =
         let next =
             match message with
-            | Incoming.Initialize path
-            | Incoming.LocationChanged path -> { state with Booted = true; Path = path }
+            | Incoming.Initialize(path, hash)
+            | Incoming.LocationChanged(path, hash) ->
+                { state with
+                    Booted = true
+                    Path = path
+                    Hash = if Routes.isRouteHash hash then hash else state.Hash }
             | Incoming.Event _
             | Incoming.EffectResult
             | Incoming.CapabilityFact

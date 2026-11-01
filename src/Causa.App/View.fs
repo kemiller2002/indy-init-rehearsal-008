@@ -12,14 +12,14 @@ type ViewValue =
 type ShellView = (string * ViewValue) list
 
 /// What the wire layer knows before the application engine is attached: has Limen initialized us, and where are we.
-type ShellState = { Booted: bool; Path: string }
+type ShellState = { Booted: bool; Path: string; Hash: string }
 
 module View =
     /// The engine identity the page and the smoke tests read (DEP-CURRENT-004 Limen startup).
     [<Literal>]
     let EngineName = "causa"
 
-    let initial: ShellState = { Booted = false; Path = "/" }
+    let initial: ShellState = { Booted = false; Path = "/"; Hash = "" }
 
     /// Pure: state to the complete view.
     let render (state: ShellState) : ShellView =
@@ -28,3 +28,8 @@ module View =
           "engineLoading", Flag(not state.Booted)
           "status", Text(if state.Booted then "Causa engine ready" else "Loading Causa")
           "path", Text state.Path ]
+        @ (Views.Shell.projectHash state.Hash
+           |> List.map (fun (name, value) ->
+               match value with
+               | Views.Str s -> name, Text s
+               | Views.Bit b -> name, Flag b))
