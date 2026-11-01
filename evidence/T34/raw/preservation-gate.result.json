@@ -1,0 +1,24 @@
+{
+ "schema": "indy-init.r8.t34-preservation-gate-run/1",
+ "ranAt": "2026-11-01T23:06Z",
+ "praxis": "praxis 3.24.0",
+ "command": "./praxis requirements preservation verify --baseline /home/user/Indy-init/requirements/causa-requirements-baseline-v4.json --source <indy-init worktree at 62df28a559c054226dd4022e9744cf1db06e954f> --derived /home/user/Indy-init/requirements-compiled/v4.1.1 --disposition research/requirements-preservation/disposition.json --approvals /home/user/Indy-init/kickoff/rehearsal-007/approvals.causa.json --approvals-sha256 63a9ce5b8a5cd160fff7d485bbd877276625b2093e894e3b7fe75b57b9d7a8c8 --trusted-approver kemiller2002 --output evidence/T34/raw/preservation-gate.json --json",
+ "exit_code": 2,
+ "stderr": "ERROR file 'research/requirements-preservation/disposition.json' does not exist\n",
+ "output_written": false,
+ "result": "UNKNOWN (RDP-005: the gate cannot run; acceptance is BLOCKED)",
+ "cause": "Rehearsal 8 never wrote a praxis.requirements-disposition/1 file (no research/requirements-preservation/ in the repository) and has no derived Praxis requirements package; T08 (preflight preservation gate) has no record in .ros, evidence/ or SCHEDULE-ACTUALS. The gate therefore cannot be re-run at acceptance with the same inputs as a first run.",
+ "inputs": {
+  "baseline": {
+   "path": "requirements/causa-requirements-baseline-v4.json",
+   "sha256": "f86a3539e48ee8dda7d99d5f4f5546a18e2397a82d308a277c8f346edb2a8f1a"
+  },
+  "approvals": {
+   "path": "kickoff/rehearsal-007/approvals.causa.json (contains APR-V411-OWNER-1/2 named in evidence/T0-START.json)",
+   "sha256": "63a9ce5b8a5cd160fff7d485bbd877276625b2093e894e3b7fe75b57b9d7a8c8"
+  },
+  "derived": "requirements-compiled/v4.1.1 (package-manifest sha256 77d15f555c215d66569db6802f8d291a1b13dfaa9f0a99d974b748a3fbc3afa0)",
+  "disposition": "absent"
+ },
+ "related_not_a_gate": "requirements-compiled/v4.1.1/preservation-report.json result PRESERVED (compiler derivation report: v4.1.1 keeps v4 plan byte for byte). It is not the praxis gate and is not counted as G0 PASS."
+}
