@@ -42,7 +42,9 @@ const placesHolding = (page) =>
     if (indexedDB.databases && (await indexedDB.databases()).length > 0) places.push("IndexedDB");
     if ("caches" in window && (await caches.keys()).length > 0) places.push("Cache Storage");
     if (navigator.storage && navigator.storage.getDirectory) {
-      for await (const _ of (await navigator.storage.getDirectory()).keys()) { places.push("OPFS"); break; }
+      // WebKit refuses OPFS in an ephemeral (Playwright) context with UnknownError: then no page can store there.
+      const root = await navigator.storage.getDirectory().catch((e) => (e && e.name === "UnknownError" ? null : Promise.reject(e)));
+      if (root) for await (const _ of root.keys()) { places.push("OPFS"); break; }
     }
     return places;
   }, TOKEN);
