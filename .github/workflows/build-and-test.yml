@@ -43,6 +43,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          set +e  # GitHub runs bash -e: capture the status and print output before deciding (review T30 F-02)
           output=$(dotnet test App.slnx -c Release --no-build 2>&1)
           status=$?
           echo "$output"
