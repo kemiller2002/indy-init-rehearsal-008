@@ -98,6 +98,9 @@
           <h2 id="causa-home-empty">No investigation is open in this tab</h2>
           <p>Start an investigation, or open a link to one you were given.</p>
           <a href="#/investigations/new">Start an investigation</a>
+          <!-- WI-R8-CRT22B (UI-001-O1, EXT-DATA-002): the explicit Connect action; the Connect form is on the new
+               investigation screen, reached by this hash route through Limen. -->
+          <ef-button><a class="ef-button" role="button" href="#/investigations/new" data-causa-connect-action>Connect data repository</a></ef-button>
         </section>
         <section aria-labelledby="causa-start-heading" data-bind-hidden="screenInvestigationStartHidden" hidden>
           <h2 id="causa-start-heading">New investigation</h2>
@@ -106,7 +109,7 @@
                engine once, kept only in this tab's memory and never bound back into the page, logged or stored. -->
           <section class="causa-connect" aria-labelledby="causa-connect-heading" data-causa-connect>
             <h3 id="causa-connect-heading">GitHub repository</h3>
-            <p role="status" data-causa-connection data-text="connectionStatus">Not connected</p>
+            <p role="status" data-causa-connect-status data-text="connectionStatus">Not connected</p>
             <form data-causa-connect-form data-event="connect.submit" data-bind-hidden="connectFormHidden" autocomplete="off">
               <label>Owner <input name="owner" data-event="connect.owner" required></label>
               <label>Repository <input name="repository" data-event="connect.repository" required></label>

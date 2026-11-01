@@ -165,8 +165,8 @@ const connect = async (page) => {
 
 const indicator = (page) => page.locator("[data-causa-save-indicator]");
 const stateLabel = (page) => indicator(page).locator("[data-causa-save-state]");
-const connection = (page) => page.locator("p[data-causa-connection]");
-const header = (page) => page.locator("span[data-causa-connection]");
+const connection = (page) => page.locator("[data-causa-connect-status]");
+const header = (page) => page.locator("[data-causa-connection]");
 
 test("Connect, Create and Save reach GitHub; Saved only after the read-back; the token never leaks", async ({ page, causa, failures }) => {
   const github = await fakeGitHub(page, { push: true });
