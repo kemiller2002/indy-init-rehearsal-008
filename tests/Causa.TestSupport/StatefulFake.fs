@@ -54,6 +54,9 @@ module StatefulFake =
 
     let private key (CommitOid oid) = oid
 
+    /// The contents API serves a file's bytes up to 1 MB; above it the answer is the large-file form (GH-LARGE-FILE).
+    let contentsLimit = 1_048_576
+
     /// A repository with one root commit on `branch` holding `files`.
     let create (owner: string) (name: string) (branch: string) (files: (string * byte[]) list) : FakeState =
         let tree = Map.ofList files
@@ -335,8 +338,35 @@ module StatefulFake =
                 let o = JsonObject()
                 o["type"] <- JsonValue.Create "file"
                 o["path"] <- JsonValue.Create file
-                o["encoding"] <- JsonValue.Create "base64"
                 o["size"] <- JsonValue.Create bytes.Length
+                o["sha"] <- JsonValue.Create(Answers.gitBlobSha bytes)
+
+                // GH-LARGE-FILE: over the contents API's 1 MB limit GitHub answers `encoding: none` with no content.
+                if bytes.Length > contentsLimit then
+                    o["encoding"] <- JsonValue.Create "none"
+                    o["content"] <- JsonValue.Create ""
+                else
+                    o["encoding"] <- JsonValue.Create "base64"
+                    o["content"] <- JsonValue.Create(Convert.ToBase64String bytes)
+
+                state, json id 200 o
+            | None -> state, message id 404 "Not Found"
+        | Get, p, _ when (rest p |> Option.exists _.StartsWith("/git/blobs/")) ->
+            // The Git blobs API: any blob in the object store by its sha, base64, no path.
+            let sha = (rest p).Value.Substring "/git/blobs/".Length |> Uri.UnescapeDataString
+
+            let found =
+                state.Commits
+                |> Map.toSeq
+                |> Seq.collect (fun (_, c) -> c.Tree |> Map.toSeq |> Seq.map snd)
+                |> Seq.tryFind (fun bytes -> Answers.gitBlobSha bytes = sha)
+
+            match found with
+            | Some bytes ->
+                let o = JsonObject()
+                o["sha"] <- JsonValue.Create sha
+                o["size"] <- JsonValue.Create bytes.Length
+                o["encoding"] <- JsonValue.Create "base64"
                 o["content"] <- JsonValue.Create(Convert.ToBase64String bytes)
                 state, json id 200 o
             | None -> state, message id 404 "Not Found"

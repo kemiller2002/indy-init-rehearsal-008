@@ -680,3 +680,56 @@ module SMSAVE =
 
         let reconciling = { unknownIn with Outstanding = Some(RequestId 7L, ReconcileFilesAt(head 3)) }
         Assert.Equal(MachineEvent SaveInput.ReconcileReadFailed, online.Interpret (ctx 50L) reconciling notFound)
+
+    // ----- Review T33-F-01 (GH-LARGE-FILE, PERSIST-007-O1): a contents answer in the large-file form (`encoding:
+    // none`) leads to exactly one blob read of that file, and the blob's bytes decide; a blob answer never leads to a
+    // second blob read.
+
+    let private blobAnswer (id: int64) (sha: string) (bytes: byte[]) =
+        Answered(RequestId id, 200, [], sprintf """{"sha":"%s","size":%d,"encoding":"base64","content":"%s"}""" sha bytes.Length (Convert.ToBase64String bytes))
+
+    let private largeFileForm (sha: string) =
+        let (RepoPath events) = StoragePaths.events investigation
+        answer (sprintf """{"type":"file","path":"%s","encoding":"none","size":2000000,"content":"","sha":"%s"}""" events sha)
+
+    let private assertOneBlobRead (session: InvestigationSession) (awaitingAgain: Awaiting) (mismatch: SaveInput) (failed: SaveInput) =
+        let files = SaveProcess.pendingCommandFiles session
+        let sha = Answers.gitBlobSha files.Events
+
+        match online.Interpret (ctx 50L) session (largeFileForm sha) with
+        | NextRequest(next, request) ->
+            Assert.Equal(Some(RequestId 50L, awaitingAgain), next.Outstanding)
+            Assert.EndsWith("/git/blobs/" + sha, request.Url)
+
+            // The written bytes: the read goes on to the next file (snapshot.json), no further blob read.
+            match online.Interpret (ctx 51L) next (blobAnswer 50L sha files.Events) with
+            | NextRequest(after, r) ->
+                Assert.Contains("snapshot.json", Uri.UnescapeDataString r.Url)
+                Assert.DoesNotContain("/git/blobs/", r.Url)
+                Assert.Equal(Some(RequestId 51L, awaitingAgain), after.Outstanding)
+            | other -> Assert.Fail(sprintf "equal blob bytes did not continue the read: %A" other)
+
+            // Other bytes (another blob): different bytes.
+            let other = Text.Encoding.UTF8.GetBytes "other"
+            Assert.Equal(MachineEvent mismatch, online.Interpret (ctx 51L) next (blobAnswer 50L (Answers.gitBlobSha other) other))
+
+            // A blob answer in the large-file form is not re-read again: a failed read (the bound is one).
+            let again = Answered(RequestId 50L, 200, [], sprintf """{"sha":"%s","encoding":"none","content":""}""" sha)
+            Assert.Equal(MachineEvent failed, online.Interpret (ctx 51L) next again)
+        | other -> Assert.Fail(sprintf "the large-file form did not lead to a blob read: %A" other)
+
+    [<Fact>]
+    let LargeFileReadBackRereadsTheBlobOnce () =
+        assertOneBlobRead
+            (awaiting (ReadBackAt(head 3)))
+            (ReadBackAt(head 3))
+            (SaveInput.ReadBackMismatched(head 3))
+            SaveInput.ReadBackReadFailed
+
+    [<Fact>]
+    let LargeFileReconciliationRereadsTheBlobOnce () =
+        assertOneBlobRead
+            { unknownIn with Outstanding = Some(RequestId 7L, ReconcileFilesAt(head 3)) }
+            (ReconcileFilesAt(head 3))
+            (SaveInput.ReconcileMarkerBytesDiffer(head 3))
+            SaveInput.ReconcileReadFailed
