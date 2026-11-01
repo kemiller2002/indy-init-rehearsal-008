@@ -32,7 +32,13 @@ test("every store empty of investigation content", async ({ page, causa }) => {
     idb: indexedDB.databases ? (await indexedDB.databases()).map((d) => d.name) : [],
     caches: "caches" in window ? await caches.keys() : [],
     opfs: navigator.storage && navigator.storage.getDirectory
-      ? await (async () => { const names = []; for await (const k of (await navigator.storage.getDirectory()).keys()) names.push(k); return names; })()
+      ? await (async () => {
+          // WebKit refuses OPFS in an ephemeral (Playwright) context with UnknownError: then no page can store there.
+          const root = await navigator.storage.getDirectory().catch((e) => (e && e.name === "UnknownError" ? null : Promise.reject(e)));
+          const names = [];
+          if (root) for await (const k of root.keys()) names.push(k);
+          return names;
+        })()
       : [],
     channel: window.__causaChannel,
     locks: window.__causaLocks
