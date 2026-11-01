@@ -148,7 +148,12 @@ module AppEngine =
         { Tab: System.Guid
           NextMarker: unit -> WriteMarker
           Policy: PolicySet
-          Actor: ActorContext }
+          Actor: ActorContext
+          /// WI-R8-T32W (CR-T32W-01): the body of a command the host knows by its identity. The frozen CommandEnvelope
+          /// carries no body (DEV-R8-09), so the host keeps the bodies beside the envelopes and hands the engine this
+          /// lookup; every decision the engine makes for a known body is the full Kernel.decideOn. `fun _ -> None`
+          /// (configFor) keeps the bare-envelope behaviour (Kernel.bareCommand).
+          CommandBody: System.Guid -> Command option }
 
     let private advance (RequestId n) = RequestId(n + 1L)
 
@@ -181,9 +186,13 @@ module AppEngine =
         | Decision.Conflict(expected, actual) -> sprintf "Version conflict: expected %A, found %A" expected actual
         | Duplicate ids -> sprintf "Duplicate of %d recorded event(s)" (List.length ids)
 
-    /// Pure: the unsaved commands decided in order by the kernel at a base (history and investigation), each against
-    /// the state as evolved so far (T-C06). Accepted envelopes are returned unchanged; refused ones carry the reason.
-    let decideAll
+    /// Pure (WI-R8-T32W): the unsaved commands decided in order by the kernel at a base (history and investigation),
+    /// each against the state as evolved so far (T-C06). A command whose body `lookup` knows is decided in full
+    /// (Kernel.decideOn against the history so far) and its events replayed onto that history; a command with no known
+    /// body is decided as the bare frozen envelope (Kernel.domain.Decide, Kernel.bareCommand). Accepted envelopes are
+    /// returned unchanged; refused ones carry the reason.
+    let decideAllWith
+        (lookup: System.Guid -> Command option)
         (config: Config)
         (history: EventEnvelope list, state: Investigation option)
         (commands: CommandEnvelope list)
@@ -197,23 +206,43 @@ module AppEngine =
                     let refuse text =
                         { acc with Refused = acc.Refused @ [ { Command = command; Reason = text } ] }, (history, state)
 
-                    match Kernel.domain.Decide config.Policy config.Actor state decidedOn with
-                    | Allowed payloads ->
-                        let events = Kernel.stamp decidedOn state payloads
+                    let accept events next =
+                        { acc with Accepted = acc.Accepted @ [ command ] }, (history @ events, next)
 
-                        let evolved =
-                            events
-                            |> List.fold
-                                (fun current event -> current |> Result.bind (fun s -> Kernel.domain.Evolve s event |> Result.map Some))
-                                (Ok state)
+                    match lookup command.CommandId with
+                    | Some body ->
+                        match Kernel.decideOn config.Policy config.Actor history { Envelope = decidedOn; Command = body } with
+                        | Allowed payloads ->
+                            let events = Kernel.stamp decidedOn state payloads
 
-                        match evolved with
-                        | Ok next -> { acc with Accepted = acc.Accepted @ [ command ] }, (history @ events, next)
-                        | Error error -> refuse (sprintf "The event does not apply: %A" error)
-                    | decision -> refuse (reason decision))
+                            match Kernel.replay (history @ events) with
+                            | Ok next -> accept events (Some next)
+                            | Error error -> refuse (sprintf "The event does not apply: %A" error)
+                        | decision -> refuse (reason decision)
+                    | None ->
+                        match Kernel.domain.Decide config.Policy config.Actor state decidedOn with
+                        | Allowed payloads ->
+                            let events = Kernel.stamp decidedOn state payloads
+
+                            let evolved =
+                                events
+                                |> List.fold
+                                    (fun current event -> current |> Result.bind (fun s -> Kernel.domain.Evolve s event |> Result.map Some))
+                                    (Ok state)
+
+                            match evolved with
+                            | Ok next -> accept events next
+                            | Error error -> refuse (sprintf "The event does not apply: %A" error)
+                        | decision -> refuse (reason decision))
                 ({ Accepted = []; Refused = [] }, (history, state))
 
         reapplied, finalHistory, finalState
+
+    /// Pure: decideAllWith with no known bodies: every command decided as the bare frozen envelope (unchanged meaning).
+    let decideAll config base' commands = decideAllWith (fun _ -> None) config base' commands
+
+    /// Pure (WI-R8-T32W): decideAllWith with the bodies the engine's config knows (the engine's own decision path).
+    let private decideKnown (config: Config) base' commands = decideAllWith config.CommandBody config base' commands
 
     /// Pure (review F-03, T32): a new command for a wired investigation stamped with the aggregate version it is
     /// decided on, the confirmed base evolved by the session's unconfirmed commands. The session holds the envelope
@@ -222,7 +251,7 @@ module AppEngine =
         match baseOf model envelope.Investigation with
         | Some opened ->
             let pending = model.Sessions |> Map.tryFind envelope.Investigation |> Option.map unconfirmed |> Option.defaultValue []
-            let _, _, state = decideAll config (opened.History, Some opened.Investigation) pending
+            let _, _, state = decideKnown config (opened.History, Some opened.Investigation) pending
             { envelope with ExpectedVersion = state |> Option.map _.Version }
         | None -> envelope
 
@@ -232,7 +261,7 @@ module AppEngine =
         match baseOf model session.Id with
         | Some opened ->
             let decided (s: InvestigationSession) =
-                let _, history, _ = decideAll config (opened.History, Some opened.Investigation) s.Unsaved
+                let _, history, _ = decideKnown config (opened.History, Some opened.Investigation) s.Unsaved
                 history |> List.skip opened.History.Length
 
             GitHubProvider.fileSetOf StorageV1.codec opened decided session
@@ -294,7 +323,7 @@ module AppEngine =
 
         match confirmedNow, baseOf model before.Id with
         | true, Some opened ->
-            let _, history, state = decideAll config (opened.History, Some opened.Investigation) before.Unsaved
+            let _, history, state = decideKnown config (opened.History, Some opened.Investigation) before.Unsaved
 
             match state with
             | Some investigation ->
@@ -341,12 +370,12 @@ module AppEngine =
 
                 match next with
                 | Reapplying remote ->
-                    let reapplied, _, _ = decideAll config (remote.History, Some remote.Investigation) (unconfirmed session)
+                    let reapplied, _, _ = decideKnown config (remote.History, Some remote.Investigation) (unconfirmed session)
                     let model', more = conflictStep config id (ConflictInput.ReapplyDone(reapplied.Accepted, reapplied.Refused)) model
                     model', hostEffects @ more
                 | Reapplied(remote, []) ->
                     let accepted =
-                        let reapplied, _, _ = decideAll config (remote.History, Some remote.Investigation) (unconfirmed session)
+                        let reapplied, _, _ = decideKnown config (remote.History, Some remote.Investigation) (unconfirmed session)
                         reapplied.Accepted
 
                     let model = { model with Loads = Map.add id (Loaded remote) model.Loads }
@@ -535,7 +564,8 @@ module AppEngine =
         { Tab = tab
           NextMarker = Markers.forTab tab
           Policy = { Id = Policies.defaultPolicyId }
-          Actor = { ActorId = "this-tab" } }
+          Actor = { ActorId = "this-tab" }
+          CommandBody = fun _ -> None }
 
     /// The engine of one tab.
     let create (config: Config) : Engine = { Init = init; Update = update config }
