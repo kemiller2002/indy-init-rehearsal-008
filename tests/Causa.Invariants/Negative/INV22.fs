@@ -64,13 +64,38 @@ module INV22 =
           "GH-NETWORK-AFTER timeout", NotAnswered(id, TimedOut), Is(function NetworkUnavailable TimedOut -> true | _ -> false)
           "successful mutation", Answered(id, 200, [], sprintf """{"data":{"createCommitOnBranch":{"commit":{"oid":"%s"}}}}""" oid2), Answer ]
 
+    /// Forms whose class depends on what was asked (review T35 R-01, R-03, R-06): every 404 meaning per context, a
+    /// rate-limit message without the header evidence, a read without content, STALE_DATA outside a mutation.
+    let private contextual: (string * ErrorMatrix.AnswerContext * HttpOutcome * Expected) list =
+        let notFound = Answered(id, 404, [], """{"message":"Not Found"}""")
+        let expected = CommitOid oid1
+
+        [ "GH-PERMISSION 404 on Connect", ErrorMatrix.ConnectRepository, notFound, Is(function PermissionDenied _ -> true | _ -> false)
+          "GH-NOT-FOUND 404 on a read", ErrorMatrix.Read "rest:contents", notFound, Is(function NotFound _ -> true | _ -> false)
+          "GH-HISTORY-REWRITTEN 404 on compare", ErrorMatrix.Compare expected, notFound, Is(function HistoryRewritten _ -> true | _ -> false)
+          "GH-NOT-FOUND 404 on the mutation endpoint", ErrorMatrix.Mutation expected, notFound, Is(function NotFound _ -> true | _ -> false)
+          "GH-RATE 403 rate-limit message without headers (R-03)",
+          ErrorMatrix.Read "rest:ref",
+          Answered(id, 403, [], """{"message":"API rate limit exceeded for user ID 1."}"""),
+          Is(function RateLimited _ -> true | _ -> false)
+          "GH-MALFORMED read without content (R-06)",
+          ErrorMatrix.Read "rest:contents",
+          Answered(id, 200, [], "{}"),
+          Is(function Malformed _ -> true | _ -> false)
+          "STALE_DATA outside a mutation invents no head (R-06)",
+          ErrorMatrix.Read "graphql",
+          Answered(id, 200, [], graphqlError "STALE_DATA" "stale"),
+          Is(function StaleHead _ -> false | _ -> true) ]
+
     [<Fact>]
     let RecordedGitHubAnswerForms () =
-        let classify = Require.classifier ()
+        let classifierFor = Require.classifier ()
+        let mutation = classifierFor (ErrorMatrix.Mutation(CommitOid oid1))
 
         let wrong =
-            forms
-            |> List.choose (fun (form, outcome, expected) ->
+            (forms |> List.map (fun (form, outcome, expected) -> form, mutation, outcome, expected))
+            @ (contextual |> List.map (fun (form, context, outcome, expected) -> form, classifierFor context, outcome, expected))
+            |> List.choose (fun (form, classify, outcome, expected) ->
                 match classify outcome, expected with
                 | Error e, Is matches when matches e -> None
                 | Ok answer, Answer when answer.Request = id -> None
