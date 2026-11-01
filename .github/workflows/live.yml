@@ -1,0 +1,62 @@
+name: Causa live provider suites
+
+# Owner: integration. The live-provider suites (SU-DOTNET-LIVE) against the authorized GitHub test repositories:
+# CAUSA_GITHUB_TOKEN (read-only, kemiller2002/causa-data) and CAUSA_WRITE_TOKEN (write, kemiller2002/causa-write-test).
+# Secrets reach the tests only through env; no step prints them, and the tests fail if a secret value appears in the
+# sanitized recordings. Each test class uses its own fresh branch of the test repository. CR-T18-1 (T18).
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CAUSA_PLAN: VP-1e3c66bcc958
+
+jobs:
+  live-provider:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Build Causa.slnx
+        run: |
+          set -euo pipefail
+          dotnet build Causa.slnx -c Release
+      - name: Live provider suite (SU-DOTNET-LIVE)
+        env:
+          CAUSA_GITHUB_TOKEN: ${{ secrets.CAUSA_GITHUB_TOKEN }}
+          CAUSA_WRITE_TOKEN: ${{ secrets.CAUSA_WRITE_TOKEN }}
+          CAUSA_RECORDINGS_OUT: ${{ github.workspace }}/provider-recordings
+        run: |
+          set -euo pipefail
+          dotnet test tests/Causa.Invariants tests/Causa.Acceptance -c Release --no-build \
+            --filter "FullyQualifiedName~Causa.Invariants.Live.INV22|FullyQualifiedName~Causa.Acceptance.Live.PERSIST025Tests|FullyQualifiedName~Causa.Acceptance.Live.PERSIST008Tests" \
+            --logger "console;verbosity=normal" --logger trx --results-directory TestResults
+      - name: Upload sanitized provider recordings
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: provider-recordings
+          path: provider-recordings/
+          if-no-files-found: warn
+      - name: Upload live test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-test-results
+          path: TestResults/
+          if-no-files-found: warn

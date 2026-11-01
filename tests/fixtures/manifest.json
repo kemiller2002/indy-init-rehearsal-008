@@ -1,0 +1,13 @@
+{
+  "schema": "causa.fixture-manifest/v1",
+  "owner": "integration",
+  "description": "Every test fixture that looks like a storage record (an investigation file set, a GitHub contents or GraphQL answer, a recorded provider response) is declared here, with its path and why it is not a credential or real user data. The credential scan honours this list without weakening: a declared file is still scanned for token shapes (ghp_, github_pat_, gho_, ghs_, Bearer values) and fails on any; only the storage-record shape itself is exempted (DCC-015-O2, R7-AMD-05, DEC-R7-010). A storage-like fixture that is not declared here fails the scan.",
+  "plan": "VP-1e3c66bcc958",
+  "fixtures": [],
+  "goldenReplay": {
+    "description": "Frozen-data golden replay (DEP-CURRENT-004-O1; CT-009/CT-010: the five frozen scenarios and the 90 negative fixtures, plus forged-history variants). Each entry names a frozen fixture directory under tests/fixtures/golden/ and its SHA-256 digest; the replay runs the domain kernel (Decide/Evolve, T13) and the persistence replay (T15) over it and compares the projection byte for byte.",
+    "status": "pending",
+    "pendingReason": "No frozen scenario data ships in requirements-compiled/v4 or v4.1.1, and the replay kernel (T13 Decide/Evolve, T15 persistence replay) does not exist yet. The owning tasks add each fixture here with its digest when they freeze it.",
+    "scenarios": []
+  }
+}

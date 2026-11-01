@@ -1,0 +1,82 @@
+{
+  "schema": "indy-init.r8-interface-manifest/1",
+  "version": "1.0.0",
+  "frozenAt": "T14",
+  "sourceCommit": "2caae6ce8091cf3d140da41d4dc2948afcde285c",
+  "domainStubs": {
+    "specification": "requirements-compiled/v4.1.1/contracts/00-DOMAIN-STUBS.fs",
+    "specSha256": "59b80124ff6eabf69db6e31792fae103bb7b8213ea8dd7a35b09272bb8704ac1",
+    "producerFile": "src/Causa.Domain/Identity.fs"
+  },
+  "interfaces": [
+    {
+      "interface": "IF41-DOMAIN",
+      "boundaries": "A,B,C",
+      "specification": "requirements-compiled/v4.1.1/contracts/01-IF41-DOMAIN.fs",
+      "specSha256": "815aec410e3dba0f7d8d8232ed8476515f0ab2d237c96170f5aaedb64e286e00",
+      "producerFile": "src/Causa.Domain/Kernel.fs",
+      "producerContainsSpecVerbatim": true
+    },
+    {
+      "interface": "IF41-STORAGE",
+      "boundaries": "D",
+      "specification": "requirements-compiled/v4.1.1/contracts/02-IF41-STORAGE.fs",
+      "specSha256": "bdf4ef23a006c3280ee67c94145fcecad01286bd2da0da1afd803f2edd064e9d",
+      "producerFile": "src/Causa.Persistence/Storage.fs",
+      "producerContainsSpecVerbatim": true
+    },
+    {
+      "interface": "IF41-WIRE",
+      "boundaries": "D",
+      "specification": "requirements-compiled/v4.1.1/contracts/03-IF41-WIRE.fs",
+      "specSha256": "a437ee4085d772cfd4a1cf1fc793580f2852ff7282259d44e86370ff3ccaa477",
+      "producerFile": "src/Causa.Persistence/Wire.fs",
+      "producerContainsSpecVerbatim": true
+    },
+    {
+      "interface": "IF41-ERRORS",
+      "boundaries": "D",
+      "specification": "requirements-compiled/v4.1.1/contracts/04-IF41-ERRORS.fs",
+      "specSha256": "fa16ee821c411dcbfac32cef4d064e560a00976edea41177fa132f8fb51e9eab",
+      "producerFile": "src/Causa.Persistence/Classify.fs",
+      "producerContainsSpecVerbatim": true
+    },
+    {
+      "interface": "IF41-SAVE",
+      "boundaries": "D",
+      "specification": "requirements-compiled/v4.1.1/contracts/05-IF41-SAVE.fs",
+      "specSha256": "550ef45ee167b5b54f51ecc649789817f9d30a0b3bd36595cda55eb745816e5a",
+      "producerFile": "src/Causa.Persistence/SaveMachine.fs",
+      "producerContainsSpecVerbatim": true
+    },
+    {
+      "interface": "IF41-APP",
+      "boundaries": "A (host relay)",
+      "specification": "requirements-compiled/v4.1.1/contracts/06-IF41-APP.fs",
+      "specSha256": "d62e594865a59afb7fc75c22676010a6fc3214bffdb1e73c3085d86eb3e28805",
+      "producerFile": "src/Causa.App/Engine.fs",
+      "producerContainsSpecVerbatim": true
+    },
+    {
+      "interface": "IF41-VIEW",
+      "boundaries": "B",
+      "specification": "requirements-compiled/v4.1.1/contracts/07-IF41-VIEW.fs",
+      "specSha256": "80f948ef32d466b2d204c96cbc7297411bfa32660b30adf87d640a1373508d2c",
+      "producerFile": "src/Causa.App/Projections.fs",
+      "producerContainsSpecVerbatim": true
+    },
+    {
+      "interface": "IF41-REPORT",
+      "boundaries": "E",
+      "specification": "requirements-compiled/v4.1.1/contracts/08-IF41-REPORT.fs",
+      "specSha256": "ab62fa82f92d140dfe64dc3fa225ff547118a481faaf3ccb13445291d9a7e33c",
+      "producerFile": "src/Causa.App/Reporting.fs",
+      "producerContainsSpecVerbatim": true
+    }
+  ],
+  "contractTests": "agent-file-ownership.json tests/Causa.Contract.Tests/**; verification-execution-plan.json",
+  "negativeControls": [
+    "contracts/negative/ForgeConfirmation.fs",
+    "contracts/negative/ReadCredential.fs"
+  ]
+}

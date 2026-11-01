@@ -8,10 +8,8 @@ open Causa.Invariants
 
 /// INV-11 (PERSIST-005-O2): every file set the application writes re-reads and replays to its snapshot.
 module INV11 =
-    let private eventId (command: CommandEnvelope) (index: int) =
-        let bytes = command.CommandId.ToByteArray()
-        bytes[15] <- byte index
-        EventId(Guid bytes)
+    /// The kernel's event identity (T13): derived from the command id and index without collisions between commands.
+    let private eventId (command: CommandEnvelope) (index: int) = EventIds.forCommand command.CommandId index
 
     let private next (state: Investigation option) =
         match state with
