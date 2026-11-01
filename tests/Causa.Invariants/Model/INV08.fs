@@ -34,7 +34,7 @@ module Bindings =
     /// things for Connect, a read, a compare and a mutation; review T35 R-01).
     let classifier: (ErrorMatrix.AnswerContext -> Classifier) option = Some ErrorMatrix.classifier
     /// The view projections (IF41-VIEW), ui.
-    let projections: Projections option = None
+    let projections: Projections option = Some Projection.value
     /// The App engine (IF41-APP), ui.
     let engine: Engine option = None
     /// The stateful GitHub fake (tests/Causa.TestSupport/StatefulFake.fs), persistence: a fresh fake per call.
