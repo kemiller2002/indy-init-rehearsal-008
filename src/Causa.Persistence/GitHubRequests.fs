@@ -184,3 +184,8 @@ module GitHubRequests =
              + " } } } }")
             ([ "owner", connection.Repository.Owner; "name", connection.Repository.Name; "oid", commit ]
              @ fileVariables manifest events snapshot)
+
+    /// T20 (GH-LARGE-FILE): a blob by its sha, the one re-read GitHub allows for a file the contents API returns with
+    /// `encoding: none` (files over 1 MB). A query, never a mutation.
+    let blob (id: RequestId) (connection: ConnectionContext) (sha: string) : HttpRequest =
+        get id connection (repoUrl connection.Repository ("/git/blobs/" + escape sha))
