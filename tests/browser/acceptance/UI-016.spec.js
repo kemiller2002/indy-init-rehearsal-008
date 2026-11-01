@@ -37,7 +37,11 @@ test("UI-016-O8", async ({ page, causa }) => {
   await causa.open(investigation);
   const css = await (await page.request.get(formaCss)).text();
   const inventory = [...new Set([...css.matchAll(/(--ef-[a-z0-9-]+)\s*:/g)].map((m) => m[1]))];
-  expect(await onlyFormaTokens(page, { inventory, formaHref: "/design-system/dist/all.css" })).toEqual([]);
+  // Forma's hooks: properties Forma's own stylesheets (the design system and its workflow engine, which lays out the
+  // causal graph, WI-R8-T23) read but never define. The engine sets them on the diagrams it lays out.
+  const workflowCss = await (await page.request.get("/dist/node_modules/@echelon-foundry/forma-workflow/dist/forma-workflow.css")).text();
+  const hooks = [...new Set([...`${css}\n${workflowCss}`.matchAll(/var\(\s*(--ef-[a-z0-9-]+)/g)].map((m) => m[1]))].filter((p) => !inventory.includes(p));
+  expect(await onlyFormaTokens(page, { inventory, hooks, formaHref: "/design-system/dist/all.css" })).toEqual([]);
   // The shell's colours resolve to Forma's semantic tokens, not literals.
   expect(await rgbOf(page, ".causa-masthead", "backgroundColor")).toEqual(
     await page.evaluate((t) => { const d = document.createElement("div"); d.style.color = `var(${t})`; document.body.append(d); const c = getComputedStyle(d).color; d.remove(); return c; }, "--ef-color-surface-inverse").then(async (c) => {
