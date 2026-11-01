@@ -1,79 +1,148 @@
 // Owner: domain. WI-R8-T12: invariant tests first (requirements-compiled/v4/invariants.json).
+// WI-R8-T15 (T35 R-02): driven from T18's recordings (tests/Causa.TestSupport/Recordings.fs) plus the forms they lack.
 namespace Causa.Invariants.Negative
 
 open Xunit
 open Causa.Persistence
 open Causa.Invariants
+open Causa.TestSupport
 
 /// INV-22 (PERSIST-008-O2): every recorded GitHub answer form maps to its github-error-matrix.json class, in the
 /// matrix's precedence order; in particular a stale head returned as FORBIDDEN is a stale head, never a permission
-/// failure, and a lost answer is a network outcome, never a conflict.
+/// failure, a rate limit (including a 403 secondary-limit message without retry-after, KD-020) is never a missing
+/// permission, and a lost answer is a network outcome, never a conflict.
 module INV22 =
     let private id = RequestId 1L
-    let private oid1 = String.replicate 40 "a"
-    let private oid2 = String.replicate 40 "b"
+    let private oidA = String.replicate 40 "a"
+    let private oidB = String.replicate 40 "b"
+
+    /// The request each form answers. The matrix makes some meanings depend on it (404 is PERMISSION during Connect,
+    /// HISTORY-REWRITTEN on compare, NOT-FOUND on a read).
+    let private contextOf (operation: string) : ErrorMatrix.AnswerContext option =
+        match operation with
+        | "graphql:createCommitOnBranch" -> Some(ErrorMatrix.Mutation(CommitOid oidB))
+        | "rest:repository" -> Some ErrorMatrix.ConnectRepository
+        | "rest:compare" -> Some(ErrorMatrix.Compare(CommitOid oidB))
+        | "rest:contents" -> Some(ErrorMatrix.Read "contents")
+        | "rest:ref" -> Some(ErrorMatrix.Read "ref")
+        | "rest:blob" -> Some(ErrorMatrix.Read "blob")
+        | _ -> None
+
+    type private Expected =
+        | Refused of (ProviderError -> bool)
+        /// The matrix says the form is not an error (GH-LARGE-FILE, GH-TRUNCATED-LIST, a successful answer): the frozen
+        /// Classifier hands it on as an answer to the request.
+        | Answer
+
+    /// The frozen Classifier's outcome each matrix class owes. An unknown class is None, so a recording with a class
+    /// this test does not know fails loudly instead of passing.
+    let private expectedFor (matrixClass: string) : Expected option =
+        match matrixClass with
+        | "GH-AUTH" -> Some(Refused(function AuthenticationFailed -> true | _ -> false))
+        | "GH-PERMISSION" -> Some(Refused(function PermissionDenied _ -> true | _ -> false))
+        | "GH-RATE-PRIMARY" -> Some(Refused(function RateLimited(Primary _) -> true | _ -> false))
+        | "GH-RATE-SECONDARY" -> Some(Refused(function RateLimited(Secondary _) -> true | _ -> false))
+        | "GH-STALE-HEAD" -> Some(Refused(function StaleHead _ -> true | _ -> false))
+        | "GH-VALIDATION" -> Some(Refused(function ValidationFailed _ -> true | _ -> false))
+        | "GH-NOT-FOUND" -> Some(Refused(function NotFound _ -> true | _ -> false))
+        | "GH-HISTORY-REWRITTEN" -> Some(Refused(function HistoryRewritten _ -> true | _ -> false))
+        | "GH-NETWORK-BEFORE" -> Some(Refused(function NetworkUnavailable FailedBeforeSending -> true | _ -> false))
+        | "GH-NETWORK-AFTER" -> Some(Refused(function NetworkUnavailable(LostAfterSending | TimedOut) -> true | _ -> false))
+        | "GH-UNKNOWN-OUTCOME" -> Some(Refused(function Unrecognised _ -> true | _ -> false))
+        | "GH-MALFORMED" -> Some(Refused(function Malformed _ -> true | _ -> false))
+        | "GH-LARGE-FILE"
+        | "GH-TRUNCATED-LIST"
+        | "ACCEPTED" -> Some Answer
+        | _ -> None
+
+    type private Form =
+        { Name: string
+          Class: string
+          Operation: string
+          Outcome: HttpOutcome }
+
+    let private ofRecording (r: Recording) =
+        { Name = "recording " + r.Name
+          Class = r.MatrixClass
+          Operation = r.Operation
+          Outcome = Recordings.asOutcome id r }
+
+    let private answered name cls operation status headers body =
+        { Name = name
+          Class = cls
+          Operation = operation
+          Outcome = Answered(id, status, headers, body) }
 
     let private graphqlError (kind: string) (message: string) =
         sprintf """{"data":null,"errors":[{"type":"%s","message":"%s"}]}""" kind message
 
-    type private Expected =
-        | Is of (ProviderError -> bool)
-        | Answer
+    /// Forms the recordings do not hold, restated from the matrix's detection rules (not live captures). Each states
+    /// its matrix class; R-02 and R-03 (T35) name the ones that were missing.
+    let private matrixForms: Form list =
+        [ answered "GH-AUTH wins over rate-limit headers" "GH-AUTH" "rest:contents" 401 [ "x-ratelimit-remaining", "0" ] """{"message":"Bad credentials"}"""
+          answered "GH-RATE-PRIMARY 429 remaining 0" "GH-RATE-PRIMARY" "rest:contents" 429 [ "x-ratelimit-remaining", "0"; "x-ratelimit-reset", "1700000000" ] "{}"
+          // KD-020: the 403 secondary-limit message observed live without a retry-after header.
+          answered "GH-RATE-SECONDARY 403 message without retry-after (KD-020)" "GH-RATE-SECONDARY" "graphql:createCommitOnBranch" 403
+              [ "x-ratelimit-remaining", "4000" ] """{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you try again."}"""
+          answered "GH-RATE-SECONDARY 403 'too quickly'" "GH-RATE-SECONDARY" "rest:contents" 403 [] """{"message":"You are creating content too quickly."}"""
+          answered "GH-RATE-SECONDARY 403 abuse detection" "GH-RATE-SECONDARY" "rest:contents" 403 [] """{"message":"You have triggered an abuse detection mechanism."}"""
+          answered "GH-PERMISSION 404 on the repository during Connect" "GH-PERMISSION" "rest:repository" 404 [ "x-ratelimit-remaining", "4990" ] """{"message":"Not Found"}"""
+          answered "GH-HISTORY-REWRITTEN compare 404" "GH-HISTORY-REWRITTEN" "rest:compare" 404 [] """{"message":"Not Found"}"""
+          answered "GH-HISTORY-REWRITTEN compare diverged" "GH-HISTORY-REWRITTEN" "rest:compare" 200 [] """{"status":"diverged","ahead_by":1,"behind_by":2,"total_commits":1,"commits":[{}]}"""
+          answered "GH-HISTORY-REWRITTEN compare behind" "GH-HISTORY-REWRITTEN" "rest:compare" 200 [] """{"status":"behind","ahead_by":0,"behind_by":2,"total_commits":0,"commits":[]}"""
+          answered "GH-TRUNCATED-LIST compare lists fewer commits than it reports" "GH-TRUNCATED-LIST" "rest:compare" 200 []
+              (sprintf """{"status":"ahead","ahead_by":300,"behind_by":0,"total_commits":300,"commits":[%s]}""" (String.concat "," (List.replicate 250 "{}")))
+          answered "GH-LARGE-FILE 403 too_large" "GH-LARGE-FILE" "rest:contents" 403 [ "x-ratelimit-remaining", "4990" ]
+              """{"message":"This API returns blobs up to 1 MB in size.","errors":[{"resource":"Blob","field":"data","code":"too_large"}]}"""
+          answered "GH-NOT-FOUND 404 file read" "GH-NOT-FOUND" "rest:contents" 404 [ "x-ratelimit-remaining", "4990" ] """{"message":"Not Found"}"""
+          answered "GH-STALE-HEAD STALE_DATA" "GH-STALE-HEAD" "graphql:createCommitOnBranch" 200 [] (graphqlError "STALE_DATA" (sprintf "Expected branch to point to %s but it did not" oidB))
+          answered "GH-STALE-HEAD as FORBIDDEN (KD-022)" "GH-STALE-HEAD" "graphql:createCommitOnBranch" 200 [] (graphqlError "FORBIDDEN" (sprintf "is at %s but expected %s" oidA oidB))
+          answered "GH-UNKNOWN-OUTCOME unrecognised graphql type" "GH-UNKNOWN-OUTCOME" "graphql:createCommitOnBranch" 200 [] (graphqlError "SOMETHING_NEW" "unexpected")
+          answered "GH-MALFORMED 2xx not JSON" "GH-MALFORMED" "graphql:createCommitOnBranch" 200 [] "<html>"
+          answered "successful mutation" "ACCEPTED" "graphql:createCommitOnBranch" 200 [] (sprintf """{"data":{"createCommitOnBranch":{"commit":{"oid":"%s"}}}}""" oidA)
+          { Name = "GH-NETWORK-BEFORE"; Class = "GH-NETWORK-BEFORE"; Operation = "graphql:createCommitOnBranch"; Outcome = NotAnswered(id, FailedBeforeSending) }
+          { Name = "GH-NETWORK-AFTER lost"; Class = "GH-NETWORK-AFTER"; Operation = "graphql:createCommitOnBranch"; Outcome = NotAnswered(id, LostAfterSending) }
+          { Name = "GH-NETWORK-AFTER timeout"; Class = "GH-NETWORK-AFTER"; Operation = "rest:contents"; Outcome = NotAnswered(id, TimedOut) } ]
 
-    /// (form, outcome, expected class) from the matrix's detection rules and recorded Rehearsal 7 forms.
-    let private forms: (string * HttpOutcome * Expected) list =
-        [ "GH-AUTH 401", Answered(id, 401, [], """{"message":"Bad credentials"}"""), Is(function AuthenticationFailed -> true | _ -> false)
-          "GH-AUTH wins over rate-limit headers",
-          Answered(id, 401, [ "x-ratelimit-remaining", "0" ], """{"message":"Bad credentials"}"""),
-          Is(function AuthenticationFailed -> true | _ -> false)
-          "GH-RATE-PRIMARY 403 remaining 0",
-          Answered(id, 403, [ "x-ratelimit-remaining", "0"; "x-ratelimit-reset", "1700000000" ], """{"message":"API rate limit exceeded"}"""),
-          Is(function RateLimited(Primary _) -> true | _ -> false)
-          "GH-RATE-PRIMARY 429 remaining 0",
-          Answered(id, 429, [ "x-ratelimit-remaining", "0"; "x-ratelimit-reset", "1700000000" ], "{}"),
-          Is(function RateLimited(Primary _) -> true | _ -> false)
-          "GH-RATE-SECONDARY 403 retry-after (Rehearsal 7 form)",
-          Answered(id, 403, [ "x-ratelimit-remaining", "4000"; "retry-after", "60" ], """{"message":"You have exceeded a secondary rate limit"}"""),
-          Is(function RateLimited(Secondary _) -> true | _ -> false)
-          "GH-RATE-SECONDARY graphql RATE_LIMITED",
-          Answered(id, 200, [], graphqlError "RATE_LIMITED" "API rate limit exceeded"),
-          Is(function RateLimited(Secondary _) -> true | _ -> false)
-          "GH-STALE-HEAD STALE_DATA",
-          Answered(id, 200, [], graphqlError "STALE_DATA" (sprintf "Expected branch to point to %s but it did not" oid1)),
-          Is(function StaleHead _ -> true | _ -> false)
-          "GH-STALE-HEAD as FORBIDDEN (KD-022)",
-          Answered(id, 200, [], graphqlError "FORBIDDEN" (sprintf "is at %s but expected %s" oid2 oid1)),
-          Is(function StaleHead _ -> true | _ -> false)
-          "GH-PERMISSION 403 without rate-limit evidence",
-          Answered(id, 403, [ "x-ratelimit-remaining", "4000" ], """{"message":"Resource not accessible by personal access token"}"""),
-          Is(function PermissionDenied _ -> true | _ -> false)
-          "GH-VALIDATION 422", Answered(id, 422, [], """{"message":"Validation Failed"}"""), Is(function ValidationFailed _ -> true | _ -> false)
-          "GH-VALIDATION graphql UNPROCESSABLE",
-          Answered(id, 200, [], graphqlError "UNPROCESSABLE" "path is invalid"),
-          Is(function ValidationFailed _ -> true | _ -> false)
-          "GH-NOT-FOUND graphql NOT_FOUND",
-          Answered(id, 200, [], graphqlError "NOT_FOUND" "Could not resolve to a Ref"),
-          Is(function NotFound _ -> true | _ -> false)
-          "GH-UNKNOWN-OUTCOME 502", Answered(id, 502, [], "Bad Gateway"), Is(function Unrecognised 502 -> true | _ -> false)
-          "GH-UNKNOWN-OUTCOME unrecognised graphql type",
-          Answered(id, 200, [], graphqlError "SOMETHING_NEW" "unexpected"),
-          Is(function Unrecognised _ -> true | _ -> false)
-          "GH-MALFORMED 2xx not JSON", Answered(id, 200, [], "<html>"), Is(function Malformed _ -> true | _ -> false)
-          "GH-NETWORK-BEFORE", NotAnswered(id, FailedBeforeSending), Is(function NetworkUnavailable FailedBeforeSending -> true | _ -> false)
-          "GH-NETWORK-AFTER lost", NotAnswered(id, LostAfterSending), Is(function NetworkUnavailable LostAfterSending -> true | _ -> false)
-          "GH-NETWORK-AFTER timeout", NotAnswered(id, TimedOut), Is(function NetworkUnavailable TimedOut -> true | _ -> false)
-          "successful mutation", Answered(id, 200, [], sprintf """{"data":{"createCommitOnBranch":{"commit":{"oid":"%s"}}}}""" oid2), Answer ]
+    /// R-03 (T35): a 403 whose message names a primary rate limit while the rate headers are missing or non-zero. The
+    /// matrix's GH-PERMISSION row excludes any message naming a rate limit, so it must not be a permission failure;
+    /// which rate class (or unknown outcome) it is, is the persistence owner's decision, so any of them passes here.
+    let private rateMessageWithoutHeaders: Form list =
+        [ answered "403 rate-limit message, no rate headers (R-03)" "R-03" "rest:contents" 403 [] """{"message":"API rate limit exceeded for user ID 1."}"""
+          answered "403 rate-limit message, remaining 5 (R-03)" "R-03" "rest:contents" 403 [ "x-ratelimit-remaining", "5" ] """{"message":"API rate limit exceeded for user ID 1."}""" ]
+
+    let private notPermission =
+        Refused(function
+            | RateLimited _
+            | Unrecognised _ -> true
+            | _ -> false)
+
+    /// Every form: the recordings first (captured live ones included once the CI probe fills them), then the rest.
+    let private forms: (Form * Expected option) list =
+        (Recordings.all |> List.map ofRecording |> List.map (fun f -> f, expectedFor f.Class))
+        @ (matrixForms |> List.map (fun f -> f, expectedFor f.Class))
+        @ (rateMessageWithoutHeaders |> List.map (fun f -> f, Some notPermission))
 
     [<Fact>]
     let RecordedGitHubAnswerForms () =
-        let classify = Require.classifier ()
+        // R-01 (T35): the matrix needs the request's context. The frozen Classifier has none, and Bindings.classifier
+        // is changing shape to take one (persistence, T19). Until it does, every context gets the one bound classifier,
+        // so the 404 forms that the context separates fail here: that is R-01 still open, not a weakened test. When the
+        // binding takes the context, this one line becomes `let classifyIn = Require.classifier ()`.
+        let classifyIn (_: ErrorMatrix.AnswerContext) : Classifier = Require.classifier ()
+
+        Assert.NotEmpty(Recordings.all)
 
         let wrong =
             forms
-            |> List.choose (fun (form, outcome, expected) ->
-                match classify outcome, expected with
-                | Error e, Is matches when matches e -> None
-                | Ok answer, Answer when answer.Request = id -> None
-                | actual, _ -> Some(sprintf "%s classified as %A" form actual))
+            |> List.choose (fun (form, expected) ->
+                match contextOf form.Operation, expected with
+                | None, _ -> Some(sprintf "%s: operation '%s' has no answer context in this test" form.Name form.Operation)
+                | _, None -> Some(sprintf "%s: matrix class '%s' is not known to this test" form.Name form.Class)
+                | Some context, Some expected ->
+                    match (classifyIn context) form.Outcome, expected with
+                    | Error e, Refused matches when matches e -> None
+                    | Ok answer, Answer when answer.Request = id -> None
+                    | actual, _ -> Some(sprintf "%s (%s, %A) classified as %A" form.Name form.Class context actual))
 
         Assert.True(List.isEmpty wrong, String.concat "\n" wrong)

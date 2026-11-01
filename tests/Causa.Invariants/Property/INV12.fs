@@ -57,8 +57,11 @@ module INV12 =
 
             match session.State with
             | SaveState.Unsaved ->
+                // Unsaved is the outcome only when the engine refused nothing: a refused command must stay in the
+                // conflict view with the engine's reason, never be dropped silently (R-10, T35).
                 Check.all
-                    [ Check.expect (session.Unsaved = accepted) (sprintf "accepted %A, the kernel accepts %A" session.Unsaved accepted)
+                    [ Check.expect (List.isEmpty refused) (sprintf "reapply ended Unsaved, but the kernel refuses %A: refused commands left without a reason" refused)
+                      Check.expect (session.Unsaved = accepted) (sprintf "accepted %A, the kernel accepts %A" session.Unsaved accepted)
                       Check.expect (session.BaseHead = remote.ReadAt) "reapply is not based on the GitHub version" ]
             | SaveState.Conflict(Reapplied(onto, refusedByEngine)) ->
                 Check.all
