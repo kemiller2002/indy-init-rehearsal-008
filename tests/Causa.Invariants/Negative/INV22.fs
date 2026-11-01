@@ -26,6 +26,7 @@ module INV22 =
         | "rest:contents" -> Some(ErrorMatrix.Read "contents")
         | "rest:ref" -> Some(ErrorMatrix.Read "ref")
         | "rest:blob" -> Some(ErrorMatrix.Read "blob")
+        | "graphql:fileSet" -> Some(ErrorMatrix.Read "graphql:fileSet")
         | _ -> None
 
     type private Expected =
