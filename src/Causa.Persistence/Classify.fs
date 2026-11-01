@@ -177,6 +177,10 @@ module ErrorMatrix =
         let m = message.ToLowerInvariant()
         m.Contains "secondary rate limit" || m.Contains "too quickly" || m.Contains "abuse"
 
+    /// A rate limit named in the message without the primary or secondary evidence (R-03): "API rate limit exceeded".
+    let private mentionsRateLimit (message: string) =
+        message.ToLowerInvariant().Contains "rate limit"
+
     let private validationTypes = set [ "UNPROCESSABLE"; "INVALID"; "INPUT_VALIDATION"; "ARGUMENT_ERROR" ]
 
     let private isRateStatus status = status = 403 || status = 429
@@ -212,18 +216,38 @@ module ErrorMatrix =
             | Some "diverged"
             | Some "behind" -> refuse GhHistoryRewritten (HistoryRewritten expected)
             | Some _ ->
-                let total = b |> prop "total_commits" |> Option.map (fun e -> e.GetInt32())
+                let total =
+                    b
+                    |> prop "total_commits"
+                    |> Option.bind (fun e ->
+                        match e.ValueKind with
+                        | JsonValueKind.Number ->
+                            match e.TryGetInt64() with
+                            | true, n -> Some n
+                            | _ -> None
+                        | _ -> None)
                 let listed =
-                    b |> prop "commits" |> Option.map (fun e -> if e.ValueKind = JsonValueKind.Array then e.GetArrayLength() else 0)
+                    b |> prop "commits" |> Option.map (fun e -> if e.ValueKind = JsonValueKind.Array then int64 (e.GetArrayLength()) else 0L)
 
                 match total, listed with
                 | Some t, Some l when t > l -> accept GhTruncatedList (id, status, rawBody)
                 | _ -> accept Accepted (id, status, rawBody)
             | None -> refuse GhMalformed (Malformed "compare answer has no status")
-        | (ConnectRepository | Read _), Some b ->
+        | ConnectRepository, Some b ->
+            match b |> prop "permissions" with
+            | Some p when p.ValueKind = JsonValueKind.Object -> accept Accepted (id, status, rawBody)
+            | _ -> refuse GhMalformed (Malformed "the repository answer has no permissions object")
+        | Read what, Some b ->
+            // R-06: a read is accepted only with the content it asked for: a file's content (or the large-file
+            // form), a ref's object sha, or a GraphQL read's data.
+            let hasString name (e: JsonElement) = e |> prop name |> Option.bind str |> Option.isSome
+
             match b |> prop "encoding" |> Option.bind str with
             | Some "none" -> accept GhLargeFile (id, status, rawBody)
-            | _ -> accept Accepted (id, status, rawBody)
+            | _ when hasString "content" b -> accept Accepted (id, status, rawBody)
+            | _ when b |> prop "object" |> Option.exists (hasString "sha") -> accept Accepted (id, status, rawBody)
+            | _ when b |> prop "data" |> Option.exists (fun d -> d.ValueKind = JsonValueKind.Object) -> accept Accepted (id, status, rawBody)
+            | _ -> refuse GhMalformed (Malformed(sprintf "the %s read has no content" what))
 
     /// Classify one outcome in its context: exactly one matrix class, by the matrix's precedence order
     /// (GH-AUTH, GH-RATE-PRIMARY, GH-RATE-SECONDARY, GH-STALE-HEAD, GH-LARGE-FILE, GH-PERMISSION, GH-VALIDATION,
@@ -248,9 +272,10 @@ module ErrorMatrix =
                     match movedHead e.Message with
                     | Some(actual, expected) -> Some(StaleHead(expected, Some actual))
                     | None when e.Type = Some "STALE_DATA" || expectedBranchForm e.Message ->
+                        // R-06: only a guarded mutation can be stale; elsewhere no expected head exists to name.
                         match context with
                         | Mutation expected -> Some(StaleHead(expected, None))
-                        | _ -> Some(StaleHead(CommitOid "", None))
+                        | _ -> None
                     | None -> None)
 
             let tooLarge =
@@ -267,6 +292,10 @@ module ErrorMatrix =
                 || gqlType "RATE_LIMITED"
             then
                 refuse GhRateSecondary (RateLimited(Secondary(tryInt retryAfter)))
+            elif status = 429 || (status = 403 && (mentionsRateLimit message || List.exists mentionsRateLimit gqlMessages)) then
+                // R-03: a 403 whose message names a rate limit is never a permission failure; with no remaining-0
+                // or retry-after evidence it is the primary limit (reset unknown unless the header says).
+                refuse GhRatePrimary (RateLimited(Primary(tryInt64 (header "x-ratelimit-reset" headers))))
             elif stale.IsSome then
                 refuse GhStaleHead stale.Value
             elif tooLarge then
@@ -302,6 +331,30 @@ module ErrorMatrix =
                 successBody context (id, status, rawBody) body
             else
                 refuse GhUnknownOutcome (Unrecognised status)
+
+    /// What a refused or unrecognised answer means for the path that sent it (R-05, matrix GH-NETWORK-AFTER,
+    /// GH-UNKNOWN-OUTCOME, GH-MALFORMED): for a mutation the outcome is unknown and must be reconciled; for a read
+    /// the read failed. Definite refusals (auth, permission, rate limit, stale head, validation, not found, history
+    /// rewritten) and accepted answers keep their class.
+    type Meaning =
+        | Definite
+        | UnknownMutationOutcome
+        | FailedBeforeSendingMeaning
+        | FailedRead
+
+    let meaning (context: AnswerContext) (classified: Classified) : Meaning =
+        let uncertain =
+            match classified.Class with
+            | GhNetworkAfter
+            | GhUnknownOutcome
+            | GhMalformed -> true
+            | _ -> false
+
+        match classified.Class, context with
+        | GhNetworkBefore, _ -> FailedBeforeSendingMeaning
+        | _, Mutation _ when uncertain -> UnknownMutationOutcome
+        | _, (ConnectRepository | Read _ | Compare _) when uncertain -> FailedRead
+        | _ -> Definite
 
     /// The matrix classifier as the IF41-ERRORS Classifier type for one context.
     let classifier (context: AnswerContext) : Classifier = fun outcome -> (classify context outcome).Result

@@ -62,3 +62,88 @@ html[data-engine="failed"] .causa-loading-indicator {
   margin-inline: auto;
   padding: var(--ef-layout-gutter);
 }
+
+/* Application shell (T16: ADRP-003, UI-014, UI-016, UI-020, UI-029). Colours are Forma semantic tokens only:
+   the masthead is the structural surface (inverse), the active destination the accent (teal role), the workspace
+   the primary surface (ivory role); amber and coral are Forma's warning and danger status colours, always with text. */
+.causa-app {
+  max-inline-size: none;
+  padding: 0;
+}
+
+.causa-masthead {
+  background: var(--ef-color-surface-inverse);
+  color: var(--ef-color-text-inverse);
+}
+
+.causa-masthead .ef-site-header__inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ef-layout-stack-space);
+  padding-inline: var(--ef-layout-gutter);
+}
+
+.causa-masthead .ef-site-header__brand,
+.causa-masthead .ef-site-header__name {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--ef-layout-stack-space);
+  color: var(--ef-color-text-inverse);
+}
+
+.causa-mark-small {
+  inline-size: var(--ef-layout-target-min);
+  block-size: var(--ef-layout-target-min);
+  color: var(--ef-color-text-inverse);
+}
+
+.causa-sync {
+  margin: 0;
+  color: var(--ef-color-text-inverse);
+}
+
+.causa-shell {
+  padding: var(--ef-layout-gutter);
+  gap: var(--ef-layout-block-space);
+}
+
+.causa-shell nav a {
+  color: var(--ef-color-text-primary);
+  align-items: center;
+}
+
+.causa-shell nav a[aria-current="page"] {
+  font-weight: bold;
+  color: var(--ef-color-accent-secondary);
+  border-inline-start: var(--ef-focus-ring-width) solid var(--ef-color-accent-secondary);
+  padding-inline-start: var(--ef-layout-stack-space);
+}
+
+.causa-investigation-header {
+  display: grid;
+  gap: var(--ef-layout-stack-space);
+  padding-block-end: var(--ef-layout-stack-space);
+  border-block-end: var(--ef-focus-ring-width) solid var(--ef-color-border-subtle);
+}
+
+.causa-investigation-context {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--ef-layout-stack-space);
+  margin: 0;
+}
+
+.causa-investigation-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ef-layout-stack-space);
+}
+
+.causa-shell .causa-investigation-nav a[aria-current="page"] {
+  border-inline-start: none;
+  padding-inline-start: 0;
+  border-block-end: var(--ef-focus-ring-width) solid var(--ef-color-accent-secondary);
+}
