@@ -93,7 +93,9 @@ jobs:
           if [ "${served}" != "${GITHUB_SHA}" ]; then
             echo "::error::Deployed SHA '${served}' is not ${GITHUB_SHA}"; exit 1
           fi
-          curl -fsS "${base}/index.html" | grep -q 'data-engine="loading"'
+          # grep without -q reads the whole page: `grep -q` exits at the first match, curl then fails writing
+          # (exit 23) and pipefail fails the step although the page is right (T31 finding D-T31-01).
+          curl -fsS "${base}/index.html" | grep 'data-engine="loading"' > /dev/null
           curl -fsS -o /dev/null "${base}/_framework/dotnet.js"
           curl -fsS -o /dev/null "${base}/node_modules/@echelon-foundry/limen/dist/index.js"
           echo "Deployed ${GITHUB_SHA} at ${base}"
