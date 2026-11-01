@@ -37,7 +37,7 @@ test("a legal command crosses Limen, the kernel decides it, and every view refre
 
   // Allowed: StartInvestigation -> InvestigationStarted at version 1, a Draft investigation.
   await submit(page, "Start investigation");
-  await expect(workspace.locator("[data-causa-outcome]")).toHaveText("StartInvestigation accepted: InvestigationStarted.");
+  await expect(workspace.locator("[data-causa-outcome]")).toHaveText("Start investigation: done.");
   await expect(workspace.locator("[data-causa-outcome]")).toHaveAttribute("data-outcome", "accepted");
   await expect(workspace.locator("[data-causa-lifecycle]")).toHaveText("Draft");
   await expect(workspace.locator("[data-causa-timeline-count]")).toHaveText("1");
@@ -45,7 +45,7 @@ test("a legal command crosses Limen, the kernel decides it, and every view refre
   await expectOneProjection(page, 1);
   // The capabilities are the kernel's, with its reasons: a second start is illegal; activation needs an observation.
   await expect(workspace.locator('[data-causa-capability="StartInvestigation"]')).toContainText("Unavailable:");
-  await expect(workspace.locator('[data-causa-capability="ActivateInvestigation"]')).toContainText("(activation-policy)");
+  await expect(workspace.locator('[data-causa-capability="ActivateInvestigation"]')).toContainText("Record at least one observation before activating");
 
   const sent = await page.evaluate(() => globalThis.__causaSent);
   expect(sent).toContain("submit.StartInvestigation");
@@ -62,16 +62,16 @@ test("a refused command shows the kernel's reason and changes nothing", async ({
   await submit(page, "Activate");
   const outcome = workspace.locator("[data-causa-outcome]");
   await expect(outcome).toHaveAttribute("data-outcome", "refused");
-  await expect(outcome).toContainText("ActivateInvestigation refused:");
-  await expect(outcome).toContainText("(activation-policy)");
+  await expect(outcome).toContainText("Activate was not done:");
+  await expect(outcome).toHaveAttribute("data-blocker-codes", "activation-policy");
   await expect(workspace.locator("[data-causa-lifecycle]")).toHaveText("Draft");
   await expect(workspace.locator("[data-causa-timeline-count]")).toHaveText("1");
   await expectOneProjection(page, 1);
 
   // Illegal transition: starting an investigation that already exists.
   await submit(page, "Start investigation");
-  await expect(outcome).toContainText("StartInvestigation refused:");
-  await expect(outcome).toContainText("(illegal-transition)");
+  await expect(outcome).toContainText("Start investigation was not done: This investigation has already been started.");
+  await expect(outcome).toHaveAttribute("data-blocker-codes", "illegal-transition");
   await expectOneProjection(page, 1);
   expect(failures).toEqual([]);
 });
@@ -92,9 +92,9 @@ test("a sequence of legal commands walks the lifecycle with one projection per a
     await expectOneProjection(page, version);
   }
   // Resolution needs a conclusion first (the kernel's resolution gate), then it is allowed.
-  await expect(workspace.locator('[data-causa-capability="ResolveInvestigation"]')).toContainText("(resolution-gate)");
+  await expect(workspace.locator('[data-causa-capability="ResolveInvestigation"]')).toContainText("Record a conclusion before resolving");
   await submit(page, "Resolve");
-  await expect(workspace.locator("[data-causa-outcome]")).toContainText("(resolution-gate)");
+  await expect(workspace.locator("[data-causa-outcome]")).toHaveAttribute("data-blocker-codes", "resolution-gate");
   await expectOneProjection(page, 3);
   await submit(page, "Record a conclusion");
   await expectOneProjection(page, 4);

@@ -197,22 +197,8 @@ module History =
 
     // ---- Words: every sentence is built from kernel values. ----
 
-    /// A command in the words a person reads (UI-024-O5). The same wording as ui's PresentationLanguage.commandLabel
-    /// (PR #37); switch to it once that module is on main. The command's name stays as data (row key) only.
-    let commandLabel (command: Command) =
-        match command with
-        | StartInvestigation -> "Start investigation"
-        | RenameInvestigation -> "Rename"
-        | ActivateInvestigation -> "Activate"
-        | MarkAwaitingEvidence -> "Mark awaiting evidence"
-        | MarkAwaitingVerification -> "Mark awaiting verification"
-        | ResolveInvestigation -> "Resolve"
-        | CloseInvestigation -> "Close"
-        | ReopenInvestigation -> "Reopen"
-        | ArchiveInvestigation -> "Archive"
-        | RecordObservation -> "Record an observation"
-        | Command.RecordHypothesis -> "Record a hypothesis"
-        | RecordConclusion -> "Record a conclusion"
+    /// A command in the words a person reads (UI-024-O5); the command's name stays as data (row key) only.
+    let commandLabel = Causa.App.PresentationLanguage.commandLabel
 
     /// Availability in words; the kernel's blocker codes stay as data (the capability row's "codes" field).
     let private availabilityText (availability: Availability) =
