@@ -11,38 +11,76 @@ open Causa.Persistence
 open Causa.Invariants
 
 /// INV-11 (PERSIST-005-O2): every file set read or written satisfies causa-storage v1.0.0, and the replayed history is
-/// contiguous. For each integrity check, a forged input that this check rejects is refused; for the domain's replay
-/// checks the test also removes the check and shows the forged input is then accepted (the mutant is caught).
+/// contiguous. For each integrity check, a forged input that only this check rejects is refused with exactly that
+/// check's failure, and a mutation step deletes the check and shows this test's verdict then fails (the mutant is
+/// caught). T35 R-07/R-08 (WI-R8-T15): exact refusals, schema-valid snapshot forgery, non-vacuous mutants.
 module INV11 =
     let private v n = Fixture.event n
 
-    /// Forged histories, each breaking exactly one replay precondition of a valid history 1, 2, 3.
-    let private forgedHistories =
+    /// Forged histories, each breaking exactly one replay precondition of a valid history 1, 2, 3, with the exact
+    /// refusal the precondition owes: EmptyHistory, or NonContiguousVersion(expected, found) at the first break.
+    let private forgedHistories: Map<string, EventEnvelope list * ReplayError> =
+        let broken expected found = NonContiguousVersion(AggregateVersion expected, AggregateVersion found)
+
         Map.ofList
-            [ "replay-gap", [ v 1L; v 3L ]
-              "replay-duplicate", [ v 1L; v 2L; v 2L ]
-              "replay-reorder", [ v 2L; v 1L; v 3L ]
-              "replay-genesis", [ v 2L; v 3L ]
-              "replay-empty", [] ]
+            [ "replay-gap", ([ v 1L; v 3L ], broken 2L 3L)
+              "replay-duplicate", ([ v 1L; v 2L; v 2L ], broken 3L 2L)
+              "replay-reorder", ([ v 2L; v 1L; v 3L ], broken 1L 2L)
+              "replay-genesis", ([ v 2L; v 3L ], broken 1L 2L)
+              "replay-empty", ([], EmptyHistory) ]
 
     let private genesis = AggregateVersion 1L
+    let private valid = [ v 1L; v 2L; v 3L ]
 
-    /// The check with its guard removed: every history passes.
-    let private replayCheckRemoved (_: AggregateVersion) (history: EventEnvelope list) : Result<EventEnvelope list, ReplayError> = Ok history
+    type private ReplayCheck = AggregateVersion -> EventEnvelope list -> Result<EventEnvelope list, ReplayError>
+
+    /// This test's verdict on a replay check for one forged history: the valid history passes unchanged and the forged
+    /// one is refused with exactly the owed error.
+    let private verdict (check: ReplayCheck) (forged: EventEnvelope list, owed: ReplayError) : Result<unit, string> =
+        match check genesis valid, check genesis forged with
+        | Ok passed, Error actual when passed = valid && actual = owed -> Ok()
+        | Ok passed, _ when passed <> valid -> Error "the valid history did not pass unchanged"
+        | Error error, _ -> Error(sprintf "the valid history was refused: %A" error)
+        | Ok _, Ok _ -> Error "the forged history was accepted"
+        | Ok _, Error actual -> Error(sprintf "refused with %A, owed %A" actual owed)
+
+    /// Mutants of the check, each removing one guard: the verdict must reject every mutant on the case that guard owns.
+    let private guardRemoved: ReplayCheck = fun _ history -> Ok history
+
+    /// Keeps only the emptiness guard (the contiguity and genesis guards are removed).
+    let private onlyEmptinessGuard: ReplayCheck =
+        fun _ history ->
+            match history with
+            | [] -> Error EmptyHistory
+            | _ -> Ok history
 
     let private replayCase (name: string) =
-        let forged = forgedHistories[name]
-        Assert.True(Result.isOk (ReplayOrder.contiguousFrom genesis [ v 1L; v 2L; v 3L ]), "a contiguous history must pass")
-        Assert.True(Result.isError (ReplayOrder.contiguousFrom genesis forged), sprintf "%s: forged history accepted" name)
-        // Mutation: with the guard removed the same forged history is accepted, so this test would fail.
-        Assert.True(Result.isOk (replayCheckRemoved genesis forged), sprintf "%s: the mutant did not change the outcome" name)
+        let case = forgedHistories[name]
+
+        match verdict ReplayOrder.contiguousFrom case with
+        | Ok() -> ()
+        | Error reason -> Assert.Fail(sprintf "%s: the production check fails the verdict: %s" name reason)
+
+        // Mutation (R-08): the verdict is not vacuous. With the guard removed this test's verdict fails, so removing
+        // the check from production would turn this case red.
+        Assert.True(Result.isError (verdict guardRemoved case), sprintf "%s: the verdict accepts a check with every guard removed" name)
+
+        match name with
+        | "replay-empty" -> ()
+        | _ ->
+            Assert.True(
+                Result.isError (verdict onlyEmptinessGuard case),
+                sprintf "%s: the verdict accepts a check without its contiguity/genesis guard" name
+            )
 
     let private kernelReplayCase () =
         let kernel = Require.kernel ()
 
         forgedHistories
-        |> Map.iter (fun name forged ->
-            Assert.True(Result.isError (kernel.Replay forged), sprintf "kernel Replay folded the %s history" name))
+        |> Map.iter (fun name (forged, owed) ->
+            match kernel.Replay forged with
+            | Ok _ -> Assert.Fail(sprintf "kernel Replay folded the %s history" name)
+            | Error actual -> Assert.True((actual = owed), sprintf "kernel Replay refused %s with %A, owed %A" name actual owed))
 
     // ----- causa-storage checks: forge one field of a file set the codec itself wrote, then verify.
 
@@ -96,14 +134,15 @@ module INV11 =
             { files with Manifest = serialize manifest }
         | None -> failwithf "the codec's manifest has none of the contract-fixed fields %A" contractFields
 
-    /// Changes the snapshot's content and re-digests it, so only snapshot-equals-replay can reject it.
+    /// Changes one snapshot value without changing its shape (a schema-valid string replaced by another string, no
+    /// property added or removed) and re-digests it, so the schema and digest checks pass and only
+    /// snapshot-equals-replay can reject it (R-07, T35).
     let private forgeSnapshotState (files: FileSet) =
         let snapshot = parse files.Snapshot
-        snapshot["forgedState"] <- JsonValue.Create(true)
 
         match holder "title" snapshot with
-        | Some o -> o["title"] <- JsonValue.Create("forged title")
-        | None -> ()
+        | Some o -> o["title"] <- JsonValue.Create("forged title " + text o "title")
+        | None -> failwith "the codec's snapshot has no title; the snapshot-equals-replay case cannot be built"
 
         let bytes = serialize snapshot
 
@@ -112,40 +151,66 @@ module INV11 =
 
     let private flipFirstByte (data: byte[]) = data |> Array.mapi (fun i b -> if i = 0 then b ^^^ 0x20uy else b)
 
-    type private Expected = VerificationFailure -> bool
+    /// How a case's refusal is judged. Only: every failure the codec reports is the named check's (the forged set is
+    /// one that only that check rejects). Includes: the named check's failure is among them (cases whose forgery
+    /// necessarily breaks more than one check, such as raw bytes that no longer parse).
+    type private Refusal =
+        | Only of (VerificationFailure -> bool)
+        | Includes of (VerificationFailure -> bool)
 
-    let private storageCases: Map<string, (FileSet -> FileSet) * Expected> =
-        let digest (f: VerificationFailure) =
+    let private storageCases: Map<string, (FileSet -> FileSet) * Refusal> =
+        let digest (field: string) (f: VerificationFailure) =
             match f with
-            | DigestMismatch _ -> true
+            | DigestMismatch named -> named = field
             | _ -> false
 
         Map.ofList
-            [ "storage-events-bytes", ((fun fs -> { fs with Events = flipFirstByte fs.Events }), digest)
-              "storage-eventsSha256", (replaceDigest "eventsSha256", digest)
-              "storage-snapshotSha256", (replaceDigest "snapshotSha256", digest)
+            [ "storage-events-bytes", ((fun fs -> { fs with Events = flipFirstByte fs.Events }), Includes(digest "eventsSha256"))
+              "storage-eventsSha256", (replaceDigest "eventsSha256", Only(digest "eventsSha256"))
+              "storage-snapshotSha256", (replaceDigest "snapshotSha256", Only(digest "snapshotSha256"))
               "storage-required-field",
               (editManifest "eventsSha256" (fun o -> o.Remove "eventsSha256" |> ignore),
-               (function
-               | MissingRequiredField _
-               | SchemaInvalid _ -> true
-               | _ -> false))
+               Only(function
+                   | MissingRequiredField(_, field) -> field = "eventsSha256"
+                   | _ -> false))
               "storage-contract-value",
               (forgeContractValue,
-               (function
-               | ContractValueMismatch _ -> true
-               | _ -> false))
+               Includes(function
+                   | ContractValueMismatch _ -> true
+                   | _ -> false))
               "storage-schema",
               ((fun fs -> { fs with Manifest = Encoding.UTF8.GetBytes "[\"not a manifest\"]" }),
-               (function
-               | SchemaInvalid _ -> true
-               | _ -> false))
+               Includes(function
+                   | SchemaInvalid _ -> true
+                   | _ -> false))
               "storage-snapshot-equals-replay",
               (forgeSnapshotState,
-               (function
-               | SnapshotDiffersFromReplay _
-               | SchemaInvalid _ -> true
-               | _ -> false)) ]
+               Only(function
+                   | SnapshotDiffersFromReplay _ -> true
+                   | _ -> false)) ]
+
+    let private named (refusal: Refusal) =
+        match refusal with
+        | Only p
+        | Includes p -> p
+
+    /// This test's verdict on a Verify function for one forged set.
+    let private storageVerdict verify commit (forged: FileSet) (refusal: Refusal) : Result<unit, string> =
+        match verify commit forged, refusal with
+        | Ok _, _ -> Error "the forged file set was accepted"
+        | Error failures, Only p when not (List.isEmpty failures) && List.forall p failures -> Ok()
+        | Error failures, Includes p when List.exists p failures -> Ok()
+        | Error failures, _ -> Error(sprintf "refused for another reason, or not only by the named check: %A" failures)
+
+    /// The codec with the named check deleted: its failures are dropped, and a set with no other failure verifies.
+    let private checkRemoved (codec: StorageCodec) (accepted: VerifiedInvestigation) (refusal: Refusal) =
+        fun commit files ->
+            match codec.Verify commit files with
+            | Ok verified -> Ok verified
+            | Error failures ->
+                match failures |> List.filter (named refusal >> not) with
+                | [] -> Ok accepted
+                | rest -> Error rest
 
     let private storageCase (name: string) =
         let codec = Require.storageCodec ()
@@ -153,15 +218,24 @@ module INV11 =
         let commit = Fixture.head 77
         let written = codec.Encode { verified with History = [] } verified.History
 
-        match codec.Verify commit written with
-        | Error failures -> Assert.Fail(sprintf "the codec refused a file set it wrote itself: %A" failures)
-        | Ok _ -> ()
+        let accepted =
+            match codec.Verify commit written with
+            | Error failures -> failwithf "the codec refused a file set it wrote itself: %A" failures
+            | Ok accepted -> accepted
 
-        let forge, expected = storageCases[name]
+        let forge, refusal = storageCases[name]
+        let forged = forge written
 
-        match codec.Verify commit (forge written) with
-        | Ok _ -> Assert.Fail(sprintf "%s: the forged file set was accepted" name)
-        | Error failures -> Assert.True(List.exists expected failures, sprintf "%s: refused for another reason: %A" name failures)
+        match storageVerdict codec.Verify commit forged refusal with
+        | Ok() -> ()
+        | Error reason -> Assert.Fail(sprintf "%s: %s" name reason)
+
+        // Mutation step (as Mutation.INV01): delete the named check from the codec and the verdict must fail, so a
+        // codec without this check cannot pass this case.
+        Assert.True(
+            Result.isError (storageVerdict (checkRemoved codec accepted refusal) commit forged refusal),
+            sprintf "%s: the case still passes with the named check deleted (surviving mutant)" name
+        )
 
     [<Theory>]
     [<InlineData("replay-gap")>]
