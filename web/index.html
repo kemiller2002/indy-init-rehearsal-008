@@ -15,7 +15,9 @@
   <script type="importmap">
     {
       "imports": {
-        "@echelon-foundry/limen": "./node_modules/@echelon-foundry/limen/dist/index.js"
+        "@echelon-foundry/limen": "./node_modules/@echelon-foundry/limen/dist/index.js",
+        "@echelon-foundry/limen/capabilities/schedule": "./node_modules/@echelon-foundry/limen/dist/capabilities/schedule/index.js",
+        "@echelon-foundry/limen/capabilities/files": "./node_modules/@echelon-foundry/limen/dist/capabilities/files/index.js"
       }
     }
   </script>
@@ -114,11 +116,13 @@
               <label>Owner <input name="owner" data-event="connect.owner" required></label>
               <label>Repository <input name="repository" data-event="connect.repository" required></label>
               <label>Branch <input name="branch" value="main" data-event="connect.branch"></label>
-              <label>Token <input name="token" type="password" data-event="connect.token" autocomplete="off" required></label>
+              <!-- WI-R8-CAPS: mounted only while a token is being typed; it leaves the DOM once Connect has made the
+                   credential, so the token does not linger in the field. -->
+              <template data-if="connectTokenShown"><label>Token <input name="token" type="password" data-event="connect.token" autocomplete="off" required></label></template>
               <ef-button><button type="submit">Connect</button></ef-button>
             </form>
             <form data-causa-reconnect-form data-event="reconnect.submit" data-bind-hidden="reconnectFormHidden" hidden autocomplete="off">
-              <label>New token <input name="token" type="password" data-event="connect.token" autocomplete="off" required></label>
+              <template data-if="reconnectTokenShown"><label>New token <input name="token" type="password" data-event="connect.token" autocomplete="off" required></label></template>
               <ef-button><button type="submit">Reconnect</button></ef-button>
             </form>
             <div data-causa-investigation-form data-bind-hidden="investigationFormHidden" hidden>

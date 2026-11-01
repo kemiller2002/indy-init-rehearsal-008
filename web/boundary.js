@@ -5,6 +5,8 @@
 // Page states (html[data-engine]): "loading" until the engine's first projection says engineReady, then "ready";
 // "failed" when the runtime cannot start or the start exceeds the deadline (WASM-LOAD-003/004/005).
 import { BrowserKernel } from "@echelon-foundry/limen";
+import { scheduleCapability } from "@echelon-foundry/limen/capabilities/schedule";
+import { filesCapability } from "@echelon-foundry/limen/capabilities/files";
 
 /** How long the engine may take to answer Initialize before the page offers Retry. */
 export const startDeadlineMs = 30_000;
@@ -93,6 +95,13 @@ export const followPrint = (doc) => {
   });
 };
 
+/**
+ * WI-R8-CAPS: the optional Limen capabilities this host offers. The engine selects them in its handshake answer to
+ * Initialize and then asks for timeouts (the save machine's automatic reconciliation reads) and downloads (Export my
+ * changes) as capability effects. Mechanism only: when and what is decided by the engine.
+ */
+export const hostCapabilities = () => [scheduleCapability(), filesCapability()];
+
 /** Boots the page: loading shell, then the engine through Limen, then handoff or failure. */
 export const boot = async (doc = document, startEngine = startDotnetEngine) => {
   show(doc, "loading");
@@ -116,7 +125,7 @@ export const boot = async (doc = document, startEngine = startDotnetEngine) => {
         if (!ready) show(doc, "failed");
       }
     }
-  });
+  }, { capabilities: hostCapabilities() });
   try {
     await withDeadline(Promise.all([kernel.start(), firstAnswer]), startDeadlineMs);
     if (!ready) show(doc, "failed");

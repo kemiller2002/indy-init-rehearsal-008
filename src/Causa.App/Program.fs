@@ -8,19 +8,97 @@ open System.Text
 open System.Text.Json
 open Causa.Domain
 
+/// WI-R8-CAPS: one generated Limen contract unit or capability as the handshake names it (id, version, fingerprint).
+type LimenIdentity = { Id: string; Version: int; Fingerprint: string }
+
+/// WI-R8-CAPS: what the host offered in Initialize (HostHandshake): its protocol revision, core contract and the
+/// optional capabilities it implements. An offer is not permission; the engine selects what it uses.
+type HostOffer =
+    { Major: int
+      Minor: int
+      Contract: LimenIdentity
+      Capabilities: LimenIdentity list }
+
+/// WI-R8-CAPS: the engine's answer to the offer (EngineHandshake Accepted): the revision it speaks and what it selected.
+type Handshake =
+    { Major: int
+      Minor: int
+      Contract: LimenIdentity
+      Selected: LimenIdentity list }
+
+/// WI-R8-CAPS: a capability's answer, reduced to what the engine acts on.
+[<RequireQualifiedAccess>]
+type CapabilityAnswer =
+    /// limen.schedule: the timeout elapsed.
+    | Fired
+    /// limen.files: the browser was handed the file.
+    | Downloaded
+    /// Anything else (Cancelled, NeedsGesture, Unsupported, Rejected, ...), by its kind.
+    | NotPerformed of kind: string
+
 /// The Limen messages the engine answers (BrowserToEngineMessage), decoded to data.
 [<RequireQualifiedAccess>]
 type Incoming =
-    | Initialize of path: string * hash: string
+    | Initialize of path: string * hash: string * offer: HostOffer option
     | Event of name: string * value: string option
     | LocationChanged of path: string * hash: string
     /// WI-R8-T22B: an Http effect's answer (LimenHttp.outcomeOf); None for any other effect result.
     | EffectResult of Causa.Persistence.HttpOutcome option
+    /// WI-R8-CAPS: an optional capability's answer (EffectResult of kind CapabilityResult).
+    | CapabilityResult of correlationId: string * capability: string * answer: CapabilityAnswer
     | CapabilityFact
     | Unreadable of reason: string
 
-/// The answer to one message (EngineToBrowserMessage). Effects are requested, never performed here.
-type Outgoing = { View: ShellView; Effects: HostEffect list; Cancellations: string list }
+/// WI-R8-CAPS: an effect as Limen performs it: an Http effect, or a request to a negotiated capability.
+[<RequireQualifiedAccess>]
+type WireEffect =
+    | Http of Causa.Persistence.HttpRequest
+    /// limen.schedule `timeout`.
+    | Timeout of correlationId: string * delayMs: int
+    /// limen.files `download` (UTF-8 text).
+    | Download of correlationId: string * fileName: string * mimeType: string * content: string
+
+/// The answer to one message (EngineToBrowserMessage). Effects are requested, never performed here. The handshake is
+/// present only in the answer to Initialize.
+type Outgoing =
+    { View: ShellView
+      Effects: WireEffect list
+      Cancellations: string list
+      Handshake: Handshake option }
+
+/// WI-R8-CAPS: the Limen identities this engine was built against (Limen 0.9.1) and the pure handshake answer.
+[<RequireQualifiedAccess>]
+module LimenHandshake =
+    /// The newest protocol minor this engine decodes (1.4: OutcomeUnknown connection-lost, read as LostAfterSending).
+    [<Literal>]
+    let ProtocolMinor = 4
+
+    let core =
+        { Id = "limen.core"; Version = 1; Fingerprint = "sha256:2d5e16b7111fc78a319706b9927e4523cfcc519b7a2c9352ca8283ba32d6b71c" }
+
+    let schedule =
+        { Id = "limen.schedule"; Version = 1; Fingerprint = "sha256:627657798f0fa735ac6f955eb4f413e7c397f0aef6942b340a87683a30db54d0" }
+
+    let files =
+        { Id = "limen.files"; Version = 1; Fingerprint = "sha256:2cf28b1016994b11955c412282ec6038a6c8c205a056b14c6039ef6fd5bfabdf" }
+
+    /// The capabilities this engine uses, when the host offers exactly these identities.
+    let wanted = [ schedule; files ]
+
+    /// Pure: Accepted with the capabilities offered exactly as this engine knows them, when the host speaks protocol 1
+    /// and the same core contract. Any other host gets no handshake (Limen's legacy mode: Http only, no capability),
+    /// so the page still works and the edge drops what it cannot request.
+    let answer (offer: HostOffer option) : Handshake option =
+        offer
+        |> Option.filter (fun o -> o.Major = 1 && o.Contract = core)
+        |> Option.map (fun o ->
+            { Major = 1
+              Minor = min o.Minor ProtocolMinor
+              Contract = core
+              Selected = wanted |> List.filter (fun c -> List.contains c o.Capabilities) })
+
+    let selectedIds (handshake: Handshake option) : Set<string> =
+        handshake |> Option.map (fun h -> h.Selected |> List.map _.Id |> Set.ofList) |> Option.defaultValue Set.empty
 
 /// WI-R8-T22B (CR-T22B-1): the tab beside the shell: the engine's Model (IF41-APP), an explicit create in flight and
 /// the Connect / investigation form drafts. The token draft exists only here, in this tab's memory, until Connect
@@ -35,7 +113,13 @@ type Tab =
       Branch: string
       Token: string
       InvestigationText: string
-      Notice: string }
+      Notice: string
+      /// WI-R8-CAPS: the capabilities the handshake selected (empty with a legacy host).
+      Capabilities: Set<string>
+      /// WI-R8-CAPS: the next capability correlation number of this tab.
+      NextCorrelation: int64
+      /// WI-R8-CAPS: the engine timer each pending limen.schedule request stands for.
+      Timers: Map<string, TimerKey> }
 
 /// WI-R8-T17: a typed command from the page through the domain kernel, decided by Update.submit (ui, WI-R8-T22;
 /// CR-T17-01): Kernel.decideOn against the tab's history, an allowed decision's events stamped and appended; a refusal
@@ -72,6 +156,52 @@ module Program =
     let private hashOf (location: JsonElement option) =
         location |> Option.bind (tryString "hash") |> Option.defaultValue ""
 
+    let private tryInt name e =
+        tryProp name e
+        |> Option.filter (fun v -> v.ValueKind = JsonValueKind.Number)
+        |> Option.bind (fun v ->
+            match v.TryGetInt32() with
+            | true, n -> Some n
+            | _ -> None)
+
+    let private identityOf (idName: string) (e: JsonElement) : LimenIdentity option =
+        match tryString idName e, tryInt "version" e, tryString "fingerprint" e with
+        | Some id, Some version, Some fingerprint -> Some { Id = id; Version = version; Fingerprint = fingerprint }
+        | _ -> None
+
+    /// Pure: the HostHandshake of an Initialize; None when absent or not readable.
+    let private offerOf (root: JsonElement) : HostOffer option =
+        tryProp "handshake" root
+        |> Option.bind (fun h ->
+            let protocol = tryProp "protocol" h
+            let capabilities =
+                match tryProp "capabilities" h with
+                | Some list when list.ValueKind = JsonValueKind.Array -> [ for c in list.EnumerateArray() -> identityOf "id" c ] |> List.choose id
+                | _ -> []
+
+            match protocol |> Option.bind (tryInt "major"), protocol |> Option.bind (tryInt "minor"), tryProp "contract" h |> Option.bind (identityOf "unit") with
+            | Some major, Some minor, Some contract ->
+                Some { Major = major; Minor = minor; Contract = contract; Capabilities = capabilities }
+            | _ -> None)
+
+    /// Pure: an EffectResult of kind CapabilityResult; None for any other result.
+    let private capabilityResultOf (result: JsonElement) : Incoming option =
+        match tryString "kind" result, tryString "correlationId" result, tryString "capability" result, tryProp "outcome" result with
+        | Some "CapabilityResult", Some correlation, Some capability, Some outcome ->
+            let answer =
+                match tryString "kind" outcome with
+                | Some "Completed" ->
+                    match tryProp "result" outcome |> Option.bind (tryString "kind") with
+                    | Some "Fired" -> CapabilityAnswer.Fired
+                    | Some "Downloaded" -> CapabilityAnswer.Downloaded
+                    | Some other -> CapabilityAnswer.NotPerformed other
+                    | None -> CapabilityAnswer.NotPerformed "Completed"
+                | Some other -> CapabilityAnswer.NotPerformed other
+                | None -> CapabilityAnswer.NotPerformed "unknown"
+
+            Some(Incoming.CapabilityResult(correlation, capability, answer))
+        | _ -> None
+
     /// Pure: one JSON message to Incoming. Never throws.
     let decode (json: string) : Incoming =
         try
@@ -80,7 +210,7 @@ module Program =
             match tryString "kind" root with
             | Some "Initialize" ->
                 let location = tryProp "location" root
-                Incoming.Initialize(pathOf location, hashOf location)
+                Incoming.Initialize(pathOf location, hashOf location, offerOf root)
             | Some "LocationChanged" ->
                 let location = tryProp "location" root
                 Incoming.LocationChanged(pathOf location, hashOf location)
@@ -88,7 +218,12 @@ module Program =
                 let ev = tryProp "event" root
                 let name = ev |> Option.bind (tryString "name") |> Option.defaultValue ""
                 Incoming.Event(name, ev |> Option.bind (tryString "value"))
-            | Some "EffectResult" -> Incoming.EffectResult(tryProp "result" root |> Option.bind LimenHttp.outcomeOf)
+            | Some "EffectResult" ->
+                let result = tryProp "result" root
+
+                match result |> Option.bind capabilityResultOf with
+                | Some capability -> capability
+                | None -> Incoming.EffectResult(result |> Option.bind LimenHttp.outcomeOf)
             | Some "CapabilityFact" -> Incoming.CapabilityFact
             | Some other -> Incoming.Unreadable $"unknown message kind {other}"
             | None -> Incoming.Unreadable "message has no kind"
@@ -98,7 +233,7 @@ module Program =
     /// Pure: the next shell state. Unknown or unreadable input leaves the state unchanged.
     let stepShell (state: ShellState) (message: Incoming) : ShellState =
         match message with
-        | Incoming.Initialize(path, hash)
+        | Incoming.Initialize(path, hash, _)
         | Incoming.LocationChanged(path, hash) ->
             { state with
                 Booted = true
@@ -111,13 +246,21 @@ module Program =
             | Some command -> { state with Workspace = Submit.command state.Workspace command }
             | None -> state
         | Incoming.EffectResult _
+        | Incoming.CapabilityResult _
         | Incoming.CapabilityFact
         | Incoming.Unreadable _ -> state
 
     /// Pure: the next shell state and its answer (the tab-local shell alone; the wired tab is stepTab).
     let step (state: ShellState) (message: Incoming) : ShellState * Outgoing =
         let next = stepShell state message
-        next, { View = View.render next; Effects = []; Cancellations = [] }
+        next,
+        { View = View.render next
+          Effects = []
+          Cancellations = []
+          Handshake =
+            match message with
+            | Incoming.Initialize(_, _, offer) -> LimenHandshake.answer offer
+            | _ -> None }
 
     /// The engine of this tab (a fresh tab identifier for its write markers, PERSIST-014).
     let private config = AppEngine.configFor (Guid.NewGuid())
@@ -133,7 +276,10 @@ module Program =
           Branch = "main"
           Token = ""
           InvestigationText = ""
-          Notice = "" }
+          Notice = ""
+          Capabilities = Set.empty
+          NextCorrelation = 1L
+          Timers = Map.empty }
 
     let private investigationOf (text: string) =
         match Guid.TryParse(text.Trim()) with
@@ -226,6 +372,19 @@ module Program =
                 run tab (Browser(HttpCompleted outcome))
         | None -> run tab (Browser(HttpCompleted outcome))
 
+    /// WI-R8-CAPS: a capability's answer. A fired reconcile timer is the engine's TimerFired; any other end of a timer
+    /// (Cancelled, Unsupported) changes nothing. A download's answer is told on the page.
+    let private onCapability (tab: Tab) (correlation: string) (capability: string) (answer: CapabilityAnswer) : Tab * HostEffect list =
+        match Map.tryFind correlation tab.Timers, answer with
+        | Some key, CapabilityAnswer.Fired -> run { tab with Timers = Map.remove correlation tab.Timers } (Browser(TimerFired key))
+        | Some _, _ -> { tab with Timers = Map.remove correlation tab.Timers }, []
+        | None, _ when capability = LimenHandshake.files.Id ->
+            match answer with
+            | CapabilityAnswer.Downloaded -> { tab with Notice = "Your unsaved changes were downloaded." }, []
+            | CapabilityAnswer.NotPerformed kind -> { tab with Notice = $"The export could not be downloaded ({kind})." }, []
+            | CapabilityAnswer.Fired -> tab, []
+        | None, _ -> tab, []
+
     /// The history the page shows for the open investigation: the verified base read from GitHub plus the kernel's
     /// events for the commands not yet confirmed (AppEngine.decideAll). None until the engine has loaded it.
     let private wiredHistory (tab: Tab) : EventEnvelope list option =
@@ -261,9 +420,37 @@ module Program =
             | _ -> { tab with Shell = stepShell tab.Shell message }
 
         match message with
+        | Incoming.Initialize(_, _, offer) -> { tab with Capabilities = LimenHandshake.selectedIds (LimenHandshake.answer offer) }, []
         | Incoming.Event(name, value) -> onEvent newCommandId tab name value
         | Incoming.EffectResult(Some outcome) -> onOutcome tab outcome
+        | Incoming.CapabilityResult(correlation, capability, answer) -> onCapability tab correlation capability answer
         | _ -> tab, []
+
+    /// Pure (WI-R8-CAPS): the engine's host effects as Limen effects. A Timer becomes a limen.schedule timeout whose
+    /// correlation the tab remembers, so its Fired answer comes back as the engine's TimerFired (the save machine's
+    /// automatic reconciliation read, PERSIST-016); a Download becomes a limen.files download. Without the capability
+    /// (a legacy host) a timer is dropped (the user still has Check again) and a download says it cannot be offered.
+    /// The leave guard has no Limen mechanism (lifecycle has no beforeunload) and LiveAnnounce is a view key.
+    let toWire (tab: Tab) (effects: HostEffect list) : Tab * WireEffect list =
+        let correlation (t: Tab) (prefix: string) =
+            $"{prefix}-{t.NextCorrelation}", { t with NextCorrelation = t.NextCorrelation + 1L }
+
+        effects
+        |> List.fold
+            (fun (t: Tab, wire) effect ->
+                match effect with
+                | Http request -> t, wire @ [ WireEffect.Http request ]
+                | Timer(key, ms) when t.Capabilities.Contains LimenHandshake.schedule.Id ->
+                    let id, t = correlation t "schedule"
+                    { t with Timers = Map.add id key t.Timers }, wire @ [ WireEffect.Timeout(id, max 0 ms) ]
+                | Download(fileName, content) when t.Capabilities.Contains LimenHandshake.files.Id ->
+                    let id, t = correlation t "files"
+                    t, wire @ [ WireEffect.Download(id, fileName, "application/json", content) ]
+                | Download _ -> { t with Notice = "This browser cannot download the export." }, wire
+                | Timer _
+                | SetLeaveGuard _
+                | LiveAnnounce _ -> t, wire)
+            (tab, [])
 
     let private flat (keys: Views.ShellKeys) : ShellView =
         keys
@@ -288,7 +475,14 @@ module Program =
         let shell = View.render shellState |> List.filter (fun (k, _) -> not (replaced.Contains k))
         let shellNames = shell |> List.map fst |> Set.ofList
         let added = engineKeys |> List.filter (fun (k, _) -> not (shellNames.Contains k))
-        shell @ added @ [ "liveAnnouncement", Text(String.concat " " announcements) ]
+        // WI-R8-CAPS: the token fields are mounted (data-if) only while a token is being typed for Connect
+        // (Disconnected) or Reconnect (CredentialRefused). Once Connect or Reconnect has made the credential the field
+        // leaves the DOM, so the typed token does not linger there, and it returns empty.
+        let tokenFields =
+            [ "connectTokenShown", Flag(tab.Engine.Connection = Disconnected)
+              "reconnectTokenShown", Flag(tab.Engine.Connection = CredentialRefused) ]
+
+        shell @ added @ tokenFields @ [ "liveAnnouncement", Text(String.concat " " announcements) ]
 
     let private writeValue (w: Utf8JsonWriter) (name: string) (value: ViewValue) =
         match value with
@@ -304,6 +498,23 @@ module Program =
                 w.WriteEndObject())
             w.WriteEndArray()
 
+    let private identity (w: Utf8JsonWriter) (idName: string) (i: LimenIdentity) =
+        w.WriteString(idName, i.Id)
+        w.WriteNumber("version", i.Version)
+        w.WriteString("fingerprint", i.Fingerprint)
+
+    /// One Capability effect request: correlation, capability identity and the pack's request object.
+    let private capability (w: Utf8JsonWriter) (correlation: string) (c: LimenIdentity) (request: unit -> unit) =
+        w.WriteStartObject()
+        w.WriteString("kind", "Capability")
+        w.WriteString("correlationId", correlation)
+        w.WriteString("capability", c.Id)
+        w.WriteNumber("version", c.Version)
+        w.WriteStartObject "request"
+        request ()
+        w.WriteEndObject()
+        w.WriteEndObject()
+
     /// Pure: the answer as Limen JSON.
     let encode (answer: Outgoing) : string =
         use stream = new MemoryStream()
@@ -314,19 +525,44 @@ module Program =
             answer.View |> List.iter (fun (name, value) -> writeValue w name value)
             w.WriteEndObject()
             w.WriteStartArray "effects"
-            // Http effects go to the Limen kernel; Timer, Download and the leave guard have no Limen effect in
-            // protocol 1 without a capability (see CR-T22B-1 notes); LiveAnnounce is rendered as a view key.
+            // Http effects are Limen Core; timers and downloads are requests to the negotiated capabilities (toWire).
             answer.Effects
             |> List.iter (function
-                | Http request -> LimenHttp.writeRequest w request
-                | Timer _
-                | Download _
-                | SetLeaveGuard _
-                | LiveAnnounce _ -> ())
+                | WireEffect.Http request -> LimenHttp.writeRequest w request
+                | WireEffect.Timeout(id, ms) ->
+                    capability w id LimenHandshake.schedule (fun () ->
+                        w.WriteString("operation", "timeout")
+                        w.WriteNumber("delayMs", ms))
+                | WireEffect.Download(id, fileName, mimeType, content) ->
+                    capability w id LimenHandshake.files (fun () ->
+                        w.WriteString("operation", "download")
+                        w.WriteString("fileName", fileName)
+                        w.WriteString("mimeType", mimeType)
+                        w.WriteString("format", "text")
+                        w.WriteString("data", content)))
             w.WriteEndArray()
             w.WriteStartArray "cancellations"
             answer.Cancellations |> List.iter w.WriteStringValue
             w.WriteEndArray()
+            answer.Handshake
+            |> Option.iter (fun h ->
+                w.WriteStartObject "handshake"
+                w.WriteString("kind", "Accepted")
+                w.WriteStartObject "protocol"
+                w.WriteNumber("major", h.Major)
+                w.WriteNumber("minor", h.Minor)
+                w.WriteEndObject()
+                w.WriteStartObject "contract"
+                identity w "unit" h.Contract
+                w.WriteEndObject()
+                w.WriteStartArray "capabilities"
+                h.Selected
+                |> List.iter (fun c ->
+                    w.WriteStartObject()
+                    identity w "id" c
+                    w.WriteEndObject())
+                w.WriteEndArray()
+                w.WriteEndObject())
             w.WriteEndObject()
         )
         Encoding.UTF8.GetString(stream.ToArray())
@@ -336,7 +572,19 @@ module Program =
 
     /// Called by Causa.Host.HostShim.Dispatch for every Limen message.
     let dispatch (json: string) : string =
-        let next, effects = stepTab Guid.NewGuid current (decode json)
+        let message = decode json
+        let stepped, effects = stepTab Guid.NewGuid current message
+        let next, wire = toWire stepped effects
         current <- next
         let announcements = effects |> List.choose (function LiveAnnounce(_, text) -> Some text | _ -> None)
-        encode { View = renderTab next announcements; Effects = effects; Cancellations = [] }
+
+        let handshake =
+            match message with
+            | Incoming.Initialize(_, _, offer) -> LimenHandshake.answer offer
+            | _ -> None
+
+        encode
+            { View = renderTab next announcements
+              Effects = wire
+              Cancellations = []
+              Handshake = handshake }

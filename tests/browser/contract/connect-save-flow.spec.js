@@ -23,9 +23,19 @@ const cors = {
  * createCommitOnBranch guard). `hold(predicate)` parks the next read (GraphQL file set or contents) matching it until released, so a test can
  * observe the page before the read-back answers.
  */
-const fakeGitHub = async (page, { push, readBackFails = false }) => {
+const fakeGitHub = async (page, { push, readBackFails = false, loseCommitAnswer = () => false }) => {
   const repo = { head: oidOf(1), commits: 1, files: new Map() };
   const trees = new Map([[repo.head, new Map()]]);
+  // WI-R8-CAPS: the branch's commits in order with their messages (for the ref read and compare the save machine's
+  // reconciliation and stale-head paths make).
+  const history = [{ sha: repo.head, message: "initial" }];
+  const record = (message) => {
+    repo.commits += 1;
+    repo.head = oidOf(repo.commits);
+    trees.set(repo.head, new Map(repo.files));
+    history.push({ sha: repo.head, message });
+    return repo.head;
+  };
   const log = [];
   const holds = [];
 
@@ -78,16 +88,40 @@ const fakeGitHub = async (page, { push, readBackFails = false }) => {
         for (const addition of input.fileChanges.additions ?? []) {
           repo.files.set(addition.path, Buffer.from(addition.contents, "base64").toString("utf8"));
         }
-        repo.commits += 1;
-        repo.head = oidOf(repo.commits);
-        trees.set(repo.head, new Map(repo.files));
-        entry.commit = repo.head;
+        const message = [input.message?.headline, input.message?.body].filter(Boolean).join("\n\n");
+        entry.commit = record(message);
+        // The commit applied, but its answer never reaches the page (the connection dropped after GitHub had it).
+        if (loseCommitAnswer(entry)) return route.abort("connectionreset");
         return json(route, { data: { createCommitOnBranch: { commit: { oid: repo.head } } } });
       }
       const target = fileSet(variables);
       entry.answeredAt = repo.head;
       const data = variables.oid !== undefined ? { repository: { object: target } } : { repository: { ref: { target } } };
       return json(route, { data });
+    }
+    if (request.method() === "GET" && url.pathname === `/repos/${OWNER}/${REPO}/git/ref/heads/main`) {
+      entry.refRead = repo.head;
+      return json(route, { ref: "refs/heads/main", object: { type: "commit", sha: repo.head } });
+    }
+    const compare = `/repos/${OWNER}/${REPO}/compare/`;
+    if (request.method() === "GET" && url.pathname.startsWith(compare)) {
+      const [base, head] = decodeURIComponent(url.pathname.slice(compare.length)).split("...");
+      const from = history.findIndex((c) => c.sha === base);
+      const to = history.findIndex((c) => c.sha === head);
+      if (from < 0 || to < 0) return json(route, { message: "Not Found" }, 404);
+      const commits = history.slice(from + 1, to + 1);
+      const before = trees.get(base);
+      const after = trees.get(head);
+      const names = new Set([...before.keys(), ...after.keys()]);
+      const files = [...names].filter((n) => before.get(n) !== after.get(n)).map((filename) => ({ filename }));
+      return json(route, {
+        status: commits.length === 0 ? "identical" : "ahead",
+        ahead_by: commits.length,
+        behind_by: 0,
+        total_commits: commits.length,
+        commits: commits.map((c) => ({ sha: c.sha, commit: { message: c.message } })),
+        files
+      });
     }
     const contents = `/repos/${OWNER}/${REPO}/contents/`;
     if (request.method() === "GET" && url.pathname.startsWith(contents)) {
@@ -106,6 +140,12 @@ const fakeGitHub = async (page, { push, readBackFails = false }) => {
   return {
     repo,
     log,
+    /** Another writer's commit on the branch (here: one that removes every file of the investigation). */
+    externalCommit(change) {
+      change(repo.files);
+      return record("another writer");
+    },
+    refReads: () => log.filter((e) => e.refRead !== undefined),
     commits: () => log.filter((e) => e.query.includes("createCommitOnBranch")),
     reads: () => log.filter((e) => e.answeredAt !== undefined),
     hold(predicate) {
@@ -254,4 +294,78 @@ test("a save whose read-back cannot confirm the commit is never shown as Saved",
   // The commit was answered, but its read-back did not verify it: the outcome stays unknown, never Saved.
   await expect(stateLabel(page)).toHaveText("Unknown commit outcome");
   await expect(stateLabel(page)).not.toHaveText("Saved");
+});
+
+// WI-R8-CAPS: Limen's schedule capability runs the engine's Timer effects. A commit whose answer is lost leaves the
+// outcome unknown; the save machine's automatic reconciliation read fires on its schedule (2 s, PERSIST-016) with no
+// user action, finds this tab's marked commit, verifies its bytes and only then says Saved.
+test("an unknown commit outcome is reconciled automatically on the schedule and resolves to Saved", async ({ page, causa }) => {
+  let lose = false;
+  const github = await fakeGitHub(page, { push: true, loseCommitAnswer: () => lose });
+  await causa.open("#/investigations/new");
+  await connect(page);
+  await page.locator("[data-causa-investigation-form]").getByRole("button", { name: "Create", exact: true }).click();
+  await expect(stateLabel(page)).toHaveText("Saved");
+  await page.locator("[data-causa-workspace]").getByRole("button", { name: "Record an observation", exact: true }).click();
+  lose = true;
+  await indicator(page).getByRole("button", { name: "Save", exact: true }).click();
+  await expect.poll(() => github.commits().length).toBe(2);
+  lose = false;
+  const written = github.commits()[1].commit;
+  await expect(stateLabel(page)).toHaveText("Unknown commit outcome");
+  expect(github.refReads()).toEqual([]);
+  // Nobody clicks Check again: the scheduled read happens by itself.
+  await expect.poll(() => github.refReads().length, { timeout: 15_000 }).toBeGreaterThanOrEqual(1);
+  await expect(stateLabel(page)).toHaveText("Saved", { timeout: 15_000 });
+  expect(github.refReads()[0].refRead).toBe(written);
+  expect(github.reads().at(-1).answeredAt).toBe(written);
+  // No second commit was sent: the first one had applied.
+  expect(github.commits()).toHaveLength(2);
+});
+
+// WI-R8-CAPS: Limen's files capability runs the engine's Download effect. A save that meets another writer's commit
+// which removed the investigation cannot be resolved here; Export my changes hands the browser a file holding the
+// unsaved commands, and nothing is written to GitHub.
+test("Export on an unresolvable conflict downloads the unsaved commands", async ({ page, causa, failures }) => {
+  const github = await fakeGitHub(page, { push: true });
+  await causa.open("#/investigations/new");
+  await connect(page);
+  await page.locator("[data-causa-investigation-form]").getByRole("button", { name: "Create", exact: true }).click();
+  await expect(stateLabel(page)).toHaveText("Saved");
+  await page.locator("[data-causa-workspace]").getByRole("button", { name: "Record an observation", exact: true }).click();
+  await expect(stateLabel(page)).toHaveText("Unsaved");
+  github.externalCommit((files) => files.clear());
+  await indicator(page).getByRole("button", { name: "Save", exact: true }).click();
+  const exportButton = page.getByRole("button", { name: "Export my changes" }).locator("visible=true").first();
+  await expect(exportButton).toBeVisible({ timeout: 15_000 });
+  const commitsBefore = github.commits().length;
+  const [download] = await Promise.all([page.waitForEvent("download"), exportButton.click()]);
+  expect(download.suggestedFilename()).toBe("causa-unsaved-commands.json");
+  const chunks = [];
+  for await (const chunk of await download.createReadStream()) chunks.push(chunk);
+  const exported = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+  expect(exported.commands).toHaveLength(1);
+  expect(exported.commands[0]).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+  await expect(page.locator("[data-causa-investigation-notice]")).toHaveText("Your unsaved changes were downloaded.");
+  expect(github.commits()).toHaveLength(commitsBefore);
+  expect(failures).toEqual([]);
+});
+
+// WI-R8-CAPS: once Connect has made the credential, the typed token is not left in the password field: the field
+// leaves the DOM, and after Disconnect it comes back empty.
+test("the token field is empty after Connect", async ({ page, causa, failures }) => {
+  await fakeGitHub(page, { push: true });
+  const token = watchToken(page);
+  await causa.open("#/investigations/new");
+  await connect(page);
+  await expect(connection(page)).toHaveText("Connected to GitHub (read and write)");
+  const values = () => page.evaluate(() => [...document.querySelectorAll('input[type="password"]')].map((i) => i.value));
+  expect((await values()).filter((v) => v !== "")).toEqual([]);
+  await token.checkPage();
+  await page.locator("[data-causa-investigation-form]").getByRole("button", { name: "Disconnect" }).click();
+  const field = page.locator("[data-causa-connect-form]").getByLabel("Token");
+  await expect(field).toBeVisible();
+  await expect(field).toHaveValue("");
+  expect(token.leaks).toEqual([]);
+  expect(failures).toEqual([]);
 });

@@ -72,3 +72,56 @@ let ``unknown events and unreadable messages leave the state unchanged`` () =
 let ``every offered command is a Limen event the engine decodes back to the same command`` () =
     for command in Workspace.offered do
         Assert.Equal(Some command, Workspace.commandOfEvent (Workspace.eventName command))
+
+// WI-R8-CAPS: the handshake answer to Initialize selects Limen's schedule and files capabilities when the host offers
+// exactly the identities this engine was built against, and no handshake (Limen legacy mode) for any other host.
+let private offer (capabilities: LimenIdentity list) : HostOffer =
+    { Major = 1
+      Minor = 4
+      Contract = LimenHandshake.core
+      Capabilities = capabilities }
+
+[<Fact>]
+let ``the handshake selects the offered schedule and files capabilities`` () =
+    let answer = LimenHandshake.answer (Some(offer [ LimenHandshake.files; LimenHandshake.schedule ]))
+    Assert.Equal(Some [ LimenHandshake.schedule; LimenHandshake.files ], answer |> Option.map _.Selected)
+    Assert.Equal(Some 4, answer |> Option.map _.Minor)
+
+[<Fact>]
+let ``a host with another contract, an unknown capability version or no offer gets no capability`` () =
+    Assert.Equal(None, LimenHandshake.answer None)
+    Assert.Equal(None, LimenHandshake.answer (Some { offer [ LimenHandshake.schedule ] with Contract = { LimenHandshake.core with Version = 2 } }))
+    let changed = LimenHandshake.answer (Some(offer [ { LimenHandshake.schedule with Fingerprint = "sha256:other" } ]))
+    Assert.Equal(Some [], changed |> Option.map _.Selected)
+
+[<Fact>]
+let ``Initialize with a host offer is answered with an Accepted handshake on the wire`` () =
+    let message =
+        """{"kind":"Initialize","protocolVersion":1,"capabilities":[],"location":{"path":"/","query":"","hash":""},"handshake":{"protocol":{"major":1,"minor":4},"contract":{"unit":"limen.core","version":1,"fingerprint":"sha256:2d5e16b7111fc78a319706b9927e4523cfcc519b7a2c9352ca8283ba32d6b71c"},"capabilities":[{"id":"limen.schedule","version":1,"fingerprint":"sha256:627657798f0fa735ac6f955eb4f413e7c397f0aef6942b340a87683a30db54d0"}]}}"""
+
+    let _, answer = Program.step View.initial (Program.decode message)
+    let handshake = JsonDocument.Parse(Program.encode answer).RootElement.GetProperty "handshake"
+    Assert.Equal("Accepted", handshake.GetProperty("kind").GetString())
+    Assert.Equal("limen.schedule", handshake.GetProperty("capabilities").[0].GetProperty("id").GetString())
+    Assert.Equal(1, handshake.GetProperty("capabilities").GetArrayLength())
+
+[<Fact>]
+let ``a reconcile timer becomes a limen.schedule timeout and its Fired answer the engine's TimerFired`` () =
+    let tab = { Program.initialTab with Capabilities = set [ LimenHandshake.schedule.Id ] }
+    let key = ReconcileTimer(InvestigationId(System.Guid.NewGuid()))
+    let next, wire = Program.toWire tab [ Timer(key, 2000); SetLeaveGuard true ]
+    Assert.Equal<WireEffect list>([ WireEffect.Timeout("schedule-1", 2000) ], wire)
+    Assert.Equal(Some key, Map.tryFind "schedule-1" next.Timers)
+
+    let fired =
+        """{"kind":"EffectResult","result":{"kind":"CapabilityResult","correlationId":"schedule-1","capability":"limen.schedule","version":1,"outcome":{"kind":"Completed","result":{"kind":"Fired","elapsedMs":2001}}}}"""
+
+    Assert.Equal(Incoming.CapabilityResult("schedule-1", "limen.schedule", CapabilityAnswer.Fired), Program.decode fired)
+    let after, _ = Program.stepTab System.Guid.NewGuid next (Program.decode fired)
+    Assert.True(after.Timers.IsEmpty)
+
+[<Fact>]
+let ``without the capability a timer is dropped and a download says it cannot be offered`` () =
+    let next, wire = Program.toWire Program.initialTab [ Timer(ReconcileTimer(InvestigationId(System.Guid.NewGuid())), 2000); Download("f.json", "{}") ]
+    Assert.Empty wire
+    Assert.Equal("This browser cannot download the export.", next.Notice)
