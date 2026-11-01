@@ -1,0 +1,103 @@
+name: Causa CI
+
+# Owner: integration. Every pull request and every push to main:
+#   1. the stack-lock gate (VER-008, DEP-CURRENT-008-O2): installed npm packages, restored NuGet packages and the
+#      .NET SDK must equal the run lock, or the job fails (FAIL/BLOCKED, never PASS);
+#   2. Causa.slnx built with warnings as errors, and its non-live .NET suites run to completion
+#      (SU-OWN-DOTNET, SU-DOTNET-DETERMINISTIC, SU-DOTNET-INVARIANTS). Live suites run in live.yml.
+# The browser suites (npx playwright test, which assembles the WASM site with `dotnet fsi build.fsx site`) run in
+# build-and-test.yml, the job branch protection requires, so they are not run twice.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # DCC-015-O1: every job that runs bound tests names the verification plan it runs.
+  CAUSA_PLAN: VP-1e3c66bcc958
+
+jobs:
+  causa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install npm dependencies (exactly the lock)
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+
+      - name: Build Causa.slnx (warnings are errors)
+        run: |
+          set -euo pipefail
+          dotnet build Causa.slnx -c Release
+
+      - name: Stack-lock gate (VER-008)
+        run: |
+          set -euo pipefail
+          mkdir -p TestResults
+          dotnet fsi build.fsx verify-lock --report TestResults/stack-lock.json
+
+      - name: Test Causa.slnx (non-live suites)
+        run: |
+          set -uo pipefail
+          output=$(dotnet test Causa.slnx -c Release --no-build --filter "FullyQualifiedName!~.Live.&FullyQualifiedName!~Causa.Invariants." --logger trx --results-directory TestResults 2>&1)
+          status=$?
+          echo "$output"
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          # A test project with no tests yet reports "No test is available"; that is allowed. An empty run overall,
+          # or any skipped test, is not a pass.
+          if ! echo "$output" | grep -qE 'Passed:[[:space:]]*[1-9]'; then
+            echo "::error::No test passed. An empty test run is not a pass."; exit 1
+          fi
+          if echo "$output" | grep -qE 'Skipped:[[:space:]]*[1-9]|Skipping:'; then
+            echo "::error::Tests were skipped. A run that skips tests is not a pass."; exit 1
+          fi
+
+      # Invariant tests are written first (T12) and bind to implementations as each owner lands it
+      # (tests/Causa.Invariants/Model/INV08.fs `Bindings`). They run here every time and the counts are
+      # published, but this step is not part of the merge gate until the release candidate: the
+      # coordinator's merge rule is a ratchet (a PR may not raise the failure count), and T31 requires
+      # every invariant to pass. Nothing is skipped or filtered out of this run. See evidence/DEVIATIONS.md DEV-R8-06.
+      - name: Invariant suite (ratchet; reported, not gated until T31)
+        id: invariants
+        continue-on-error: true
+        run: |
+          set -uo pipefail
+          output=$(dotnet test tests/Causa.Invariants -c Release --no-build --filter "FullyQualifiedName!~.Live." --logger "trx;LogFileName=invariants.trx" --results-directory TestResults 2>&1)
+          status=$?
+          echo "$output" | tail -40
+          echo "$output" | grep -E 'Passed!|Failed!' | tee TestResults/invariants-summary.txt
+          {
+            echo "### Invariant suite (ratchet)"
+            echo '```'
+            echo "$output" | grep -E 'Passed!|Failed!'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Upload test results and the stack-lock report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: causa-ci-results
+          path: TestResults/
+          retention-days: 14

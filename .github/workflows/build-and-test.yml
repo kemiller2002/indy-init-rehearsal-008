@@ -16,6 +16,10 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # DCC-015-O1: every job that runs bound tests names the verification plan it runs.
+  CAUSA_PLAN: VP-1e3c66bcc958
+
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
@@ -119,6 +123,7 @@ jobs:
           fi
           echo "Every shared library Chromium links against is present."
 
+      # playwright.config.ts assembles the WebAssembly site first (dotnet fsi build.fsx site), then serves it.
       - name: Verify the pages in a real browser
         run: npx playwright test
 
