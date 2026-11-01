@@ -5,6 +5,7 @@ namespace Causa.App
 open System.IO
 open System.Text
 open System.Text.Json
+open Causa.Domain
 
 /// The Limen messages the engine answers (BrowserToEngineMessage), decoded to data.
 [<RequireQualifiedAccess>]
@@ -18,6 +19,30 @@ type Incoming =
 
 /// The answer to one message (EngineToBrowserMessage). Effects are requested, never performed here.
 type Outgoing = { View: ShellView; Effects: unit list; Cancellations: string list }
+
+/// WI-R8-T17: a typed command from the page through the domain kernel. Pure: the kernel decides against the tab's
+/// history (Kernel.decideOn, DEV-R8-09: the frozen Decide cannot see the command body); an allowed decision's events
+/// are stamped (Kernel.stamp) and appended, and the projection evolves them by replay; a refusal changes nothing but
+/// the answer the page shows.
+[<RequireQualifiedAccess>]
+module Submit =
+    let envelopeFor (workspace: Workspace) (summary: Investigation option) : CommandEnvelope =
+        { CommandId = Workspace.commandId (workspace.Submissions + 1)
+          Investigation = Workspace.investigation
+          ExpectedVersion = summary |> Option.map _.Version }
+
+    let command (workspace: Workspace) (command: Command) : Workspace =
+        let summary = Kernel.replay workspace.History |> Result.toOption
+        let envelope = envelopeFor workspace summary
+        let submitted = { workspace with Submissions = workspace.Submissions + 1 }
+
+        match Kernel.decideOn Workspace.policy Workspace.actor workspace.History { Envelope = envelope; Command = command } with
+        | Allowed payloads ->
+            let events = Kernel.stamp envelope summary payloads
+            { submitted with
+                History = workspace.History @ events
+                Last = Some(Accepted(command, events)) }
+        | decision -> { submitted with Last = Some(Refused(command, decision)) }
 
 module Program =
     let private tryProp (name: string) (e: JsonElement) =
@@ -72,7 +97,10 @@ module Program =
                     Booted = true
                     Path = path
                     Hash = if Routes.isRouteHash hash then hash else state.Hash }
-            | Incoming.Event _
+            | Incoming.Event(name, _) ->
+                match Workspace.commandOfEvent name with
+                | Some command -> { state with Workspace = Submit.command state.Workspace command }
+                | None -> state
             | Incoming.EffectResult
             | Incoming.CapabilityFact
             | Incoming.Unreadable _ -> state

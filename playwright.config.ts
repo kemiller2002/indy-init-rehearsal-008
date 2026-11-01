@@ -23,7 +23,11 @@ export default defineConfig({
   timeout: 60_000,
   reporter: process.env.CI ? [["github"], ["list"], ["json", { outputFile: "test-results/playwright.json" }]] : [["list"]],
   use: { baseURL: origin, trace: "retain-on-failure" },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"], launchOptions: chromiumLaunch } }],
+  // SU-BROWSER-CHROMIUM and SU-BROWSER-WEBKIT name their project (--project=chromium | --project=webkit).
+  projects: [
+    { name: "chromium", use: { ...devices["Desktop Chrome"], launchOptions: chromiumLaunch } },
+    { name: "webkit", use: { ...devices["Desktop Safari"] } }
+  ],
   webServer: {
     command: `dotnet fsi build.fsx site && python3 -m http.server ${port} --bind 127.0.0.1`,
     url: `${origin}/dist/index.html`,
