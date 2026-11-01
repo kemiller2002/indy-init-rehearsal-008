@@ -264,6 +264,39 @@ test("Connect, Create and Save reach GitHub; Saved only after the read-back; the
   expect(failures).toEqual([]);
 });
 
+// WI-R8-T32W (P0 from WI-R8-UTESTS): on a connected investigation a domain button is decided as that command, not as
+// an observation (the tab keeps the command body beside the frozen envelope), so Activate is the event committed.
+test("on a connected investigation Activate is decided and committed as the activation", async ({ page, causa, failures }) => {
+  const github = await fakeGitHub(page, { push: true });
+  await causa.open("#/investigations/new");
+  await connect(page);
+  await expect(connection(page)).toHaveText("Connected to GitHub (read and write)");
+  await page.locator("[data-causa-investigation-form]").getByRole("button", { name: "Create", exact: true }).click();
+  await expect(stateLabel(page)).toHaveText("Saved");
+  await expect(page.locator("[data-causa-lifecycle]")).toHaveText("Draft");
+
+  const workspace = page.locator("[data-causa-workspace]");
+  await workspace.getByRole("button", { name: "Record an observation", exact: true }).click();
+  await workspace.getByRole("button", { name: "Activate", exact: true }).click();
+  await expect(stateLabel(page)).toHaveText("Unsaved");
+  await expect(page.locator("[data-causa-lifecycle]")).toHaveText("Active");
+  await expect(page.locator('[data-causa-workspace] [data-text="observationCount"]')).toHaveText("1");
+
+  await indicator(page).getByRole("button", { name: "Save", exact: true }).click();
+  await expect(stateLabel(page)).toHaveText("Saved");
+  expect(github.commits()).toHaveLength(2);
+  const events = [...github.repo.files.entries()].find(([path]) => path.endsWith("events.ndjson"));
+  expect(events, "the commit wrote the investigation's events file").toBeDefined();
+  const kinds = events[1]
+    .split("\n")
+    .filter((line) => line.trim() !== "")
+    .map((line) => JSON.parse(line))
+    .map((event) => event.eventType);
+  expect(kinds).toEqual(["InvestigationStarted", "ObservationRecorded", "InvestigationActivated"]);
+  await expect(page.locator("[data-causa-lifecycle]")).toHaveText("Active");
+  expect(failures).toEqual([]);
+});
+
 test("a credential without push is connected read-only: Create sends no commit and no Save is offered", async ({ page, causa, failures }) => {
   const github = await fakeGitHub(page, { push: false });
   const token = watchToken(page);

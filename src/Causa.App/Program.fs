@@ -119,7 +119,11 @@ type Tab =
       /// WI-R8-CAPS: the next capability correlation number of this tab.
       NextCorrelation: int64
       /// WI-R8-CAPS: the engine timer each pending limen.schedule request stands for.
-      Timers: Map<string, TimerKey> }
+      Timers: Map<string, TimerKey>
+      /// WI-R8-T32W: the body of each domain command this tab sent to a wired investigation, by its command identity.
+      /// The frozen CommandEnvelope (Msg.DomainCommand) carries no body (DEV-R8-09), so the tab keeps it here and the
+      /// engine decides with it (AppEngine.Config.CommandBody) instead of as Kernel.bareCommand.
+      Commands: Map<Guid, Command> }
 
 /// WI-R8-T17: a typed command from the page through the domain kernel, decided by Update.submit (ui, WI-R8-T22;
 /// CR-T17-01): Kernel.decideOn against the tab's history, an allowed decision's events stamped and appended; a refusal
@@ -281,15 +285,20 @@ module Program =
           Notice = ""
           Capabilities = Set.empty
           NextCorrelation = 1L
-          Timers = Map.empty }
+          Timers = Map.empty
+          Commands = Map.empty }
 
     let private investigationOf (text: string) =
         match Guid.TryParse(text.Trim()) with
         | true, g -> Some(InvestigationId g)
         | _ -> None
 
+    /// WI-R8-T32W: the engine's config with the bodies of the commands this tab sent (pure lookup into Tab.Commands).
+    let configOf (tab: Tab) : AppEngine.Config =
+        { config with CommandBody = fun id -> Map.tryFind id tab.Commands }
+
     let private run (tab: Tab) (msg: Msg) =
-        let model, effects = engine.Update msg tab.Engine
+        let model, effects = AppEngine.update (configOf tab) msg tab.Engine
         { tab with Engine = model }, effects
 
     let private onActive (tab: Tab) (f: InvestigationId -> Msg) =
@@ -317,7 +326,8 @@ module Program =
             match ConnectionMachine.credentialOf tab.Token with
             | Some credential -> run { tab with Token = "" } (Connection(ConnectionInput.ReconnectSubmitted credential))
             | None -> tab, []
-        | "connect.disconnect" -> run { tab with Active = None; Creation = None } (Connection ConnectionInput.DisconnectConfirmed)
+        | "connect.disconnect" ->
+            run { tab with Active = None; Creation = None; Commands = Map.empty } (Connection ConnectionInput.DisconnectConfirmed)
         | "investigation.id" -> { tab with InvestigationText = v }, []
         | "investigation.open" ->
             match investigationOf tab.InvestigationText with
@@ -349,18 +359,19 @@ module Program =
         | "conflict.Export" -> onActive tab (fun id -> ConflictStep(id, Causa.Persistence.ConflictInput.ExportChosen))
         | "conflict.Retry" -> onActive tab (fun id -> ConflictStep(id, Causa.Persistence.ConflictInput.ReadAgain))
         | _ ->
-            // A command for a wired investigation goes to its save session (DomainCommand, CR-T17-01: the frozen
-            // envelope carries no body, so the kernel decides it as Kernel.bareCommand, DEV-R8-09).
+            // A command for a wired investigation goes to its save session (DomainCommand, CR-T17-01). The frozen
+            // envelope carries no body (DEV-R8-09), so the tab keeps the body by the command's identity and the engine
+            // decides it in full (WI-R8-T32W), never as Kernel.bareCommand.
             match Workspace.commandOfEvent name, tab.Active with
-            | Some _, Some id when tab.Engine.Sessions.ContainsKey id ->
+            | Some command, Some id when tab.Engine.Sessions.ContainsKey id ->
                 let envelope: CommandEnvelope = { CommandId = newCommandId (); Investigation = id; ExpectedVersion = None }
-                run tab (DomainCommand envelope)
+                run { tab with Commands = Map.add envelope.CommandId command tab.Commands } (DomainCommand envelope)
             | _ -> tab, []
 
     let private onOutcome (tab: Tab) (outcome: Causa.Persistence.HttpOutcome) : Tab * HostEffect list =
         match tab.Creation with
         | Some creation ->
-            let model, next, effects = Create.answer config creation outcome tab.Engine
+            let model, next, effects = Create.answer (configOf tab) creation outcome tab.Engine
 
             if next <> creation then
                 let notice =
@@ -397,7 +408,7 @@ module Program =
                 match Map.tryFind id tab.Engine.Sessions with
                 | Some session ->
                     let _, history, _ =
-                        AppEngine.decideAll config (opened.History, Some opened.Investigation) (AppEngine.unconfirmed session)
+                        AppEngine.decideAllWith (configOf tab).CommandBody (configOf tab) (opened.History, Some opened.Investigation) (AppEngine.unconfirmed session)
 
                     history
                 | None -> opened.History))
