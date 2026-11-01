@@ -15,6 +15,8 @@ type ViewValue =
     | Text of string
     | Number of float
     | Flag of bool
+    /// A Limen data-each list: one flat record of string fields per row (WI-R8-T23 graph lists).
+    | Rows of (string * string) list list
 
 /// One complete Limen ViewState: every bound key, every time (never a patch).
 type ShellView = (string * ViewValue) list
@@ -190,6 +192,16 @@ module View =
             | Views.Str s -> name, Text s
             | Views.Bit b -> name, Flag b)
 
+    /// The causal graph's keys and lists (Views/Graph.fs, ui-2), from the same history the workspace replays.
+    let private graphKeys (workspace: Workspace) : ShellView =
+        let graph = Views.Graph.project workspace.History
+        (graph.Keys
+         |> List.map (fun (name, value) ->
+             match value with
+             | Views.Str s -> name, Text s
+             | Views.Bit b -> name, Flag b))
+        @ (graph.Lists |> List.map (fun (name, rows) -> name, Rows rows))
+
     /// Pure: state to the complete view.
     let render (state: ShellState) : ShellView =
         [ "engine", Text EngineName
@@ -199,3 +211,4 @@ module View =
           "path", Text state.Path ]
         @ shellKeys state.Hash
         @ renderWorkspace state.Workspace
+        @ graphKeys state.Workspace

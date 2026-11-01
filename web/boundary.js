@@ -53,9 +53,31 @@ const show = (doc, state) => {
   if (status) status.textContent = state === "failed" ? "Causa could not start." : "Starting Causa…";
 };
 
+/**
+ * WI-R8-T23: hands the engine-projected Forma workflow document (data-workflow, bound by Limen from Views/Graph.fs) to
+ * its <forma-workflow> element whenever the projection changes. The element lays it out; nothing here decides content.
+ */
+export const followWorkflows = (doc) => {
+  const loaded = new WeakMap();
+  const feed = (element) => {
+    const text = element.getAttribute("data-workflow");
+    if (!text || loaded.get(element) === text || typeof element.load !== "function") return;
+    loaded.set(element, text);
+    element.load(text).catch((error) => console.error("Causa graph:", error));
+  };
+  const feedAll = () => doc.querySelectorAll("forma-workflow[data-workflow]").forEach(feed);
+  new doc.defaultView.MutationObserver((records) => records.forEach((record) => feed(record.target))).observe(doc.body, {
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["data-workflow"]
+  });
+  doc.defaultView.customElements.whenDefined("forma-workflow").then(feedAll);
+};
+
 /** Boots the page: loading shell, then the engine through Limen, then handoff or failure. */
 export const boot = async (doc = document, startEngine = startDotnetEngine) => {
   show(doc, "loading");
+  followWorkflows(doc);
   doc.querySelector("[data-causa-retry]")?.addEventListener("click", () => doc.defaultView?.location.reload());
   let ready = false;
   let started = null;
