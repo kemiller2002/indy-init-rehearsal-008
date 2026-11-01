@@ -125,12 +125,43 @@ jobs:
 
       # playwright.config.ts assembles the WebAssembly site first (dotnet fsi build.fsx site), then serves it.
       - name: Verify the pages in a real browser
-        run: npx playwright test
+        run: npx playwright test --project=chromium
 
       - name: Upload browser traces on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-traces
+          path: test-results/
+          retention-days: 7
+
+  # WI-R8-T17 completion ("runs in WebKit in CI"): the integration checkpoint and the shell's acceptance specs in
+  # WebKit (SU-BROWSER-WEBKIT's browser). WebKit's OS libraries come from apt, so the install has an overall deadline.
+  webkit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install npm dependencies (exactly the lock)
+        run: npm ci --no-audit --no-fund
+      - name: Install WebKit and its OS libraries
+        timeout-minutes: 8
+        run: |
+          printf '%s\n' 'Acquire::Retries "3";' 'Acquire::http::Timeout "30";' 'Acquire::https::Timeout "30";' \
+            | sudo tee /etc/apt/apt.conf.d/99-bounded-network > /dev/null
+          timeout 420 npx playwright install --with-deps webkit
+      - name: Integration checkpoint and acceptance specs in WebKit
+        run: npx playwright test --project=webkit tests/browser/contract/legal-command-integration.spec.js tests/browser/acceptance
+      - name: Upload WebKit traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-webkit
           path: test-results/
           retention-days: 7
