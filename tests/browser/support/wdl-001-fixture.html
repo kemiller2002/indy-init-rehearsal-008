@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WDL-001 working example: Forma workflow layout engine</title>
+  <!-- WI-R8-T24 working example. The layout comes from the existing Echelon engine,
+       @echelon-foundry/forma-workflow (kemiller2002/forma, packages/workflow), which runs
+       the F# Forma.Workflow engine on .NET WebAssembly. This page authors no coordinates. -->
+  <link rel="stylesheet" href="/node_modules/@echelon-foundry/design-system/dist/tokens.css">
+  <link rel="stylesheet" href="/node_modules/@echelon-foundry/design-system/dist/foundations.css">
+  <link rel="stylesheet" href="/node_modules/@echelon-foundry/design-system/dist/components.css">
+  <link rel="stylesheet" href="/node_modules/@echelon-foundry/forma-workflow/dist/forma-workflow.css">
+  <script type="module" src="/node_modules/@echelon-foundry/forma-workflow/dist/forma-workflow.js"></script>
+</head>
+<body>
+  <main>
+    <h1>Investigation workflow</h1>
+    <forma-workflow id="investigation" mode="view">
+      <script type="application/json" class="forma-workflow-source">
+{
+  "format": "forma-workflow",
+  "formatVersion": "1.0.0",
+  "id": "causa-wdl-001",
+  "title": "Root cause investigation",
+  "description": "An incident is observed, hypotheses are tested against evidence, and a root cause is confirmed or the investigation loops back.",
+  "language": "en",
+  "direction": "ltr",
+  "forma": { "version": "0.4.0" },
+  "nodes": [
+    { "id": "observe", "kind": "start", "label": "Observe incident" },
+    { "id": "hypothesise", "kind": "task", "label": "Form hypothesis" },
+    { "id": "evidence", "kind": "task", "label": "Collect evidence" },
+    { "id": "supported", "kind": "decision", "label": "Evidence supports it?" },
+    { "id": "confirm", "kind": "end", "label": "Confirm root cause" }
+  ],
+  "edges": [
+    { "id": "e1", "source": { "node": "observe" }, "target": { "node": "hypothesise" } },
+    { "id": "e2", "source": { "node": "hypothesise" }, "target": { "node": "evidence" } },
+    { "id": "e3", "source": { "node": "evidence" }, "target": { "node": "supported" } },
+    { "id": "e4", "source": { "node": "supported" }, "target": { "node": "confirm" }, "label": "Yes" },
+    { "id": "e5", "source": { "node": "supported" }, "target": { "node": "hypothesise" }, "label": "No" }
+  ]
+}
+      </script>
+      <p>Loading the workflow diagram.</p>
+    </forma-workflow>
+  </main>
+</body>
+</html>

@@ -1,6 +1,20 @@
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk.WebAssembly">
+  <!-- Owner: integration. The browser-wasm host of the Causa engine (no AOT). Its only code is the [JSExport]
+       marshalling shim in Host.cs; every application decision lives in Causa.App. `dotnet publish` (build.fsx
+       site) writes the engine's _framework/ beside web/index.html and web/boundary.js. -->
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <RunAOTCompilation>false</RunAOTCompilation>
+    <WasmEnableThreads>false</WasmEnableThreads>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- No trimming: FSharp.Core is not trim-safe (IL2104), and trimming it can break reflection-based printing and
+         equality at run time. The site ships every referenced assembly whole (compressed .br/.gz beside each). -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <!-- The page fingerprints nothing itself: web/index.html imports _framework/dotnet.js by name. -->
+    <WasmFingerprintAssets>false</WasmFingerprintAssets>
+    <OverrideHtmlAssetPlaceholders>false</OverrideHtmlAssetPlaceholders>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../Causa.App/Causa.App.fsproj" />

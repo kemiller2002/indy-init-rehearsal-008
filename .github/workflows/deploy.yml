@@ -1,0 +1,97 @@
+name: Deploy Causa to GitHub Pages
+
+# Owner: integration. The approved Pages workflow for Causa: builds the WebAssembly site at the exact pushed SHA
+# (`dotnet fsi build.fsx site`: web/ + the engine's _framework/ + the locked Limen, Forma, Folio and Forma workflow
+# browser assets), publishes it, then checks the deployed site serves that build. Runs only when the repository
+# variable DEPLOY_TARGET is `github-pages`. deploy-pages.yml (the Conditor scaffold) shares the `pages` concurrency
+# group and no longer deploys on push, so the two can never publish concurrently.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: vars.DEPLOY_TARGET == 'github-pages'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Install npm dependencies (exactly the lock)
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+      - name: Assemble the site
+        run: |
+          set -euo pipefail
+          dotnet fsi build.fsx site
+          test -f dist/index.html || { echo "::error::dist/index.html missing"; exit 1; }
+          test -f dist/_framework/dotnet.js || { echo "::error::dist/_framework/dotnet.js missing"; exit 1; }
+          echo "${GITHUB_SHA}" > dist/deployed-sha.txt
+      - name: Stack-lock gate (VER-008)
+        run: |
+          set -euo pipefail
+          dotnet fsi build.fsx verify-lock
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  deployed-acceptance:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: The deployed site serves this exact SHA and its engine
+        env:
+          PAGE_URL: ${{ needs.deploy.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          base="${PAGE_URL%/}"
+          for attempt in 1 2 3 4 5 6; do
+            served=$(curl -fsS "${base}/deployed-sha.txt" || true)
+            if [ "${served}" = "${GITHUB_SHA}" ]; then break; fi
+            sleep 10
+          done
+          if [ "${served}" != "${GITHUB_SHA}" ]; then
+            echo "::error::Deployed SHA '${served}' is not ${GITHUB_SHA}"; exit 1
+          fi
+          curl -fsS "${base}/index.html" | grep -q 'data-engine="loading"'
+          curl -fsS -o /dev/null "${base}/_framework/dotnet.js"
+          curl -fsS -o /dev/null "${base}/node_modules/@echelon-foundry/limen/dist/index.js"
+          echo "Deployed ${GITHUB_SHA} at ${base}"

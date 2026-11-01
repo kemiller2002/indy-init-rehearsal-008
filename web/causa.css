@@ -1,0 +1,64 @@
+/* Owner: integration. Causa's stylesheet entry. It reads only published Forma 0.12.0 custom properties
+   (analysis/forma-0.12.0-inventory.json) and declares none of its own (AGENT-RULES "Use only published Forma").
+   UI roles change it through an integration-owned change request. */
+
+/* Forma gap remedy: nine Forma 0.12.0 patterns have links shorter than the target minimum. */
+a {
+  display: inline-block;
+  min-block-size: var(--ef-layout-target-min);
+  min-inline-size: var(--ef-layout-target-min);
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Loading shell (WASM-LOAD-001..006). */
+.causa-loading {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: var(--ef-layout-stack-space);
+  min-block-size: 100vh;
+  padding: var(--ef-layout-gutter);
+  background: var(--ef-color-surface-primary);
+  color: var(--ef-color-text-primary);
+  text-align: center;
+}
+
+.causa-mark {
+  inline-size: calc(var(--ef-layout-target-min) * 2);
+  block-size: calc(var(--ef-layout-target-min) * 2);
+  color: var(--ef-color-text-heading);
+}
+
+.causa-loading-indicator {
+  inline-size: var(--ef-layout-target-min);
+  block-size: var(--ef-layout-target-min);
+  border: var(--ef-focus-ring-width) solid var(--ef-color-text-muted);
+  border-block-start-color: var(--ef-color-focus-ring);
+  border-radius: 50%;
+  animation: causa-spin var(--ef-motion-cadence-rotation-period) linear infinite;
+}
+
+html[data-engine="failed"] .causa-loading-indicator {
+  display: none;
+}
+
+@keyframes causa-spin {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .causa-loading-indicator {
+    animation: none;
+  }
+}
+
+.causa-app {
+  max-inline-size: var(--ef-layout-width-wide);
+  margin-inline: auto;
+  padding: var(--ef-layout-gutter);
+}

@@ -35,3 +35,273 @@ type ConnectResult =
 type Connector =
     { ConnectRequest: RequestId -> ConnectionContext -> HttpRequest
       InterpretConnect: RequestId -> HttpOutcome -> ConnectResult }
+
+/// T18: the classifier of analysis/github-error-matrix.json. Pure functions over HttpOutcome; the class is decided
+/// from the answer's typed content and headers with the matrix's precedence rule, never from a shared status alone.
+module ErrorMatrix =
+    open System
+    open System.Text.Json
+    open System.Text.RegularExpressions
+
+    /// The matrix rows, one case per class id (GH-*).
+    type MatrixClass =
+        | GhAuth
+        | GhPermission
+        | GhRatePrimary
+        | GhRateSecondary
+        | GhStaleHead
+        | GhValidation
+        | GhNotFound
+        | GhHistoryRewritten
+        | GhNetworkBefore
+        | GhNetworkAfter
+        | GhUnknownOutcome
+        | GhMalformed
+        | GhReadBackMismatch
+        | GhLargeFile
+        | GhTruncatedList
+        /// Not a matrix row: an answer every check accepted.
+        | Accepted
+
+    let classId (c: MatrixClass) : string =
+        match c with
+        | GhAuth -> "GH-AUTH"
+        | GhPermission -> "GH-PERMISSION"
+        | GhRatePrimary -> "GH-RATE-PRIMARY"
+        | GhRateSecondary -> "GH-RATE-SECONDARY"
+        | GhStaleHead -> "GH-STALE-HEAD"
+        | GhValidation -> "GH-VALIDATION"
+        | GhNotFound -> "GH-NOT-FOUND"
+        | GhHistoryRewritten -> "GH-HISTORY-REWRITTEN"
+        | GhNetworkBefore -> "GH-NETWORK-BEFORE"
+        | GhNetworkAfter -> "GH-NETWORK-AFTER"
+        | GhUnknownOutcome -> "GH-UNKNOWN-OUTCOME"
+        | GhMalformed -> "GH-MALFORMED"
+        | GhReadBackMismatch -> "GH-READBACK-MISMATCH"
+        | GhLargeFile -> "GH-LARGE-FILE"
+        | GhTruncatedList -> "GH-TRUNCATED-LIST"
+        | Accepted -> "ACCEPTED"
+
+    /// The matrix's maxAttempts per class: no path may retry a class beyond this bound.
+    let maxAttempts (c: MatrixClass) : int =
+        match c with
+        | GhAuth
+        | GhPermission
+        | GhRateSecondary
+        | GhValidation
+        | GhNotFound
+        | GhHistoryRewritten
+        | GhNetworkBefore
+        | GhReadBackMismatch
+        | Accepted -> 0
+        | GhLargeFile -> 1
+        | GhRatePrimary
+        | GhStaleHead
+        | GhNetworkAfter
+        | GhUnknownOutcome
+        | GhMalformed
+        | GhTruncatedList -> 3
+
+    /// What the request was, which the classifier needs where the matrix makes the meaning depend on it.
+    type AnswerContext =
+        /// createCommitOnBranch guarded by this expected head.
+        | Mutation of expected: CommitOid
+        /// The repository read during Connect (a 404 there means the token cannot see it).
+        | ConnectRepository
+        /// A file or ref read at a named commit after Connect confirmed access.
+        | Read of what: string
+        /// compare <expected>...head during reconciliation.
+        | Compare of expected: CommitOid
+
+    type Classified =
+        { Class: MatrixClass
+          Result: Result<ProviderAnswer, ProviderError> }
+
+    type GraphQLError = { Type: string option; Message: string }
+
+    let private header (name: string) (headers: (string * string) list) : string option =
+        headers
+        |> List.tryFind (fun (k, _) -> String.Equals(k, name, StringComparison.OrdinalIgnoreCase))
+        |> Option.map snd
+
+    let private tryParse (body: string) : JsonElement option =
+        try
+            use doc = JsonDocument.Parse body
+            Some(doc.RootElement.Clone())
+        with :? JsonException ->
+            None
+
+    let private prop (name: string) (e: JsonElement) : JsonElement option =
+        match e.ValueKind with
+        | JsonValueKind.Object ->
+            match e.TryGetProperty name with
+            | true, v -> Some v
+            | _ -> None
+        | _ -> None
+
+    let private str (e: JsonElement) : string option =
+        match e.ValueKind with
+        | JsonValueKind.String ->
+            match e.GetString() with
+            | null -> None
+            | v -> Some v
+        | _ -> None
+
+    /// GraphQL `errors[]` as (type, message) pairs; empty when the body has none.
+    let graphQLErrors (body: JsonElement option) : GraphQLError list =
+        match body |> Option.bind (prop "errors") with
+        | Some arr when arr.ValueKind = JsonValueKind.Array ->
+            [ for e in arr.EnumerateArray() ->
+                  { Type = prop "type" e |> Option.bind str
+                    Message = prop "message" e |> Option.bind str |> Option.defaultValue "" } ]
+        | _ -> []
+
+    let private restMessage (body: JsonElement option) : string =
+        body |> Option.bind (prop "message") |> Option.bind str |> Option.defaultValue ""
+
+    let private oidPattern = "[0-9a-fA-F]{7,64}"
+
+    /// The moved-head form GitHub returns with type FORBIDDEN (Rehearsal 7, KD-022): "... is at <oid> but expected <oid>".
+    let movedHead (message: string) : (CommitOid * CommitOid) option =
+        let m = Regex.Match(message, sprintf "is at (%s) but expected (%s)" oidPattern oidPattern)
+
+        if m.Success then
+            Some(CommitOid m.Groups.[1].Value, CommitOid m.Groups.[2].Value)
+        else
+            None
+
+    let private expectedBranchForm (message: string) =
+        message.Contains("Expected branch to point to", StringComparison.OrdinalIgnoreCase)
+
+    let private mentionsSecondary (message: string) =
+        let m = message.ToLowerInvariant()
+        m.Contains "secondary rate limit" || m.Contains "too quickly" || m.Contains "abuse"
+
+    let private validationTypes = set [ "UNPROCESSABLE"; "INVALID"; "INPUT_VALIDATION"; "ARGUMENT_ERROR" ]
+
+    let private isRateStatus status = status = 403 || status = 429
+
+    let private refuse c e = { Class = c; Result = Error e }
+
+    let private accept c (id, status, body) =
+        { Class = c; Result = Ok { Request = id; Status = status; Body = body } }
+
+    let private tryInt (s: string option) =
+        s |> Option.bind (fun v -> match Int32.TryParse v with | true, n -> Some n | _ -> None)
+
+    let private tryInt64 (s: string option) =
+        s |> Option.bind (fun v -> match Int64.TryParse v with | true, n -> Some n | _ -> None)
+
+    let private successBody (context: AnswerContext) (id, status, rawBody: string) (body: JsonElement option) : Classified =
+        match context, body with
+        | _, None -> refuse GhMalformed (Malformed "the 2xx body does not decode as JSON")
+        | Mutation _, Some b ->
+            let oid =
+                b
+                |> prop "data"
+                |> Option.bind (prop "createCommitOnBranch")
+                |> Option.bind (prop "commit")
+                |> Option.bind (prop "oid")
+                |> Option.bind str
+
+            match oid with
+            | Some _ -> accept Accepted (id, status, rawBody)
+            | None -> refuse GhMalformed (Malformed "createCommitOnBranch answer has no commit oid")
+        | Compare expected, Some b ->
+            match b |> prop "status" |> Option.bind str with
+            | Some "diverged"
+            | Some "behind" -> refuse GhHistoryRewritten (HistoryRewritten expected)
+            | Some _ ->
+                let total = b |> prop "total_commits" |> Option.map (fun e -> e.GetInt32())
+                let listed =
+                    b |> prop "commits" |> Option.map (fun e -> if e.ValueKind = JsonValueKind.Array then e.GetArrayLength() else 0)
+
+                match total, listed with
+                | Some t, Some l when t > l -> accept GhTruncatedList (id, status, rawBody)
+                | _ -> accept Accepted (id, status, rawBody)
+            | None -> refuse GhMalformed (Malformed "compare answer has no status")
+        | (ConnectRepository | Read _), Some b ->
+            match b |> prop "encoding" |> Option.bind str with
+            | Some "none" -> accept GhLargeFile (id, status, rawBody)
+            | _ -> accept Accepted (id, status, rawBody)
+
+    /// Classify one outcome in its context: exactly one matrix class, by the matrix's precedence order
+    /// (GH-AUTH, GH-RATE-PRIMARY, GH-RATE-SECONDARY, GH-STALE-HEAD, GH-LARGE-FILE, GH-PERMISSION, GH-VALIDATION,
+    /// GH-NOT-FOUND, then the rest).
+    let classify (context: AnswerContext) (outcome: HttpOutcome) : Classified =
+        match outcome with
+        | NotAnswered(_, FailedBeforeSending) -> refuse GhNetworkBefore (NetworkUnavailable FailedBeforeSending)
+        | NotAnswered(_, failure) -> refuse GhNetworkAfter (NetworkUnavailable failure)
+        | Answered(id, status, headers, rawBody) ->
+            let body = tryParse rawBody
+            let errors = graphQLErrors body
+            let message = restMessage body
+            let remaining = header "x-ratelimit-remaining" headers
+            let retryAfter = header "retry-after" headers
+            let primaryEvidence = remaining = Some "0"
+            let gqlType t = errors |> List.exists (fun e -> e.Type = Some t)
+            let gqlMessages = errors |> List.map (fun e -> e.Message)
+
+            let stale =
+                errors
+                |> List.tryPick (fun e ->
+                    match movedHead e.Message with
+                    | Some(actual, expected) -> Some(StaleHead(expected, Some actual))
+                    | None when e.Type = Some "STALE_DATA" || expectedBranchForm e.Message ->
+                        match context with
+                        | Mutation expected -> Some(StaleHead(expected, None))
+                        | _ -> Some(StaleHead(CommitOid "", None))
+                    | None -> None)
+
+            let tooLarge =
+                status = 403
+                && (errors |> List.exists (fun e -> e.Type = Some "too_large")
+                    || (body |> Option.bind (prop "errors") |> Option.map (fun e -> e.ToString().Contains "too_large") |> Option.defaultValue false))
+
+            if status = 401 then
+                refuse GhAuth AuthenticationFailed
+            elif primaryEvidence && (isRateStatus status || gqlType "RATE_LIMITED") then
+                refuse GhRatePrimary (RateLimited(Primary(tryInt64 (header "x-ratelimit-reset" headers))))
+            elif
+                (isRateStatus status && (retryAfter.IsSome || mentionsSecondary message || List.exists mentionsSecondary gqlMessages))
+                || gqlType "RATE_LIMITED"
+            then
+                refuse GhRateSecondary (RateLimited(Secondary(tryInt retryAfter)))
+            elif stale.IsSome then
+                refuse GhStaleHead stale.Value
+            elif tooLarge then
+                accept GhLargeFile (id, status, rawBody)
+            elif status = 403 then
+                refuse GhPermission (PermissionDenied message)
+            elif status = 404 then
+                match context with
+                | ConnectRepository -> refuse GhPermission (PermissionDenied "repository not visible to this credential")
+                | Compare expected -> refuse GhHistoryRewritten (HistoryRewritten expected)
+                | Read what -> refuse GhNotFound (NotFound what)
+                | Mutation _ -> refuse GhNotFound (NotFound "graphql endpoint")
+            elif gqlType "FORBIDDEN" then
+                refuse GhPermission (PermissionDenied(String.concat "; " gqlMessages))
+            elif status = 422 then
+                let restErrors =
+                    match body |> Option.bind (prop "errors") with
+                    | Some arr when arr.ValueKind = JsonValueKind.Array ->
+                        [ for e in arr.EnumerateArray() ->
+                              match e.ValueKind with
+                              | JsonValueKind.String -> str e |> Option.defaultValue ""
+                              | _ -> prop "message" e |> Option.bind str |> Option.defaultValue (e.ToString()) ]
+                    | _ -> []
+
+                refuse GhValidation (ValidationFailed(message :: restErrors |> List.filter (String.IsNullOrEmpty >> not)))
+            elif errors |> List.exists (fun e -> e.Type |> Option.exists validationTypes.Contains) then
+                refuse GhValidation (ValidationFailed gqlMessages)
+            elif gqlType "NOT_FOUND" then
+                refuse GhNotFound (NotFound(String.concat "; " gqlMessages))
+            elif not errors.IsEmpty then
+                refuse GhUnknownOutcome (Unrecognised status)
+            elif status >= 200 && status < 300 then
+                successBody context (id, status, rawBody) body
+            else
+                refuse GhUnknownOutcome (Unrecognised status)
+
+    /// The matrix classifier as the IF41-ERRORS Classifier type for one context.
+    let classifier (context: AnswerContext) : Classifier = fun outcome -> (classify context outcome).Result
