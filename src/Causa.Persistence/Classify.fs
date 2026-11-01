@@ -117,7 +117,12 @@ module ErrorMatrix =
         { Class: MatrixClass
           Result: Result<ProviderAnswer, ProviderError> }
 
-    type GraphQLError = { Type: string option; Message: string }
+    /// One GraphQL `errors[]` entry: its type, message and the response path it names (field names and list
+    /// indices as text; empty when GitHub names none).
+    type GraphQLError =
+        { Type: string option
+          Message: string
+          Path: string list }
 
     let private header (name: string) (headers: (string * string) list) : string option =
         headers
@@ -153,7 +158,97 @@ module ErrorMatrix =
         | Some arr when arr.ValueKind = JsonValueKind.Array ->
             [ for e in arr.EnumerateArray() ->
                   { Type = prop "type" e |> Option.bind str
-                    Message = prop "message" e |> Option.bind str |> Option.defaultValue "" } ]
+                    Message = prop "message" e |> Option.bind str |> Option.defaultValue ""
+                    Path =
+                      match prop "path" e with
+                      | Some p when p.ValueKind = JsonValueKind.Array ->
+                          [ for step in p.EnumerateArray() ->
+                                match step.ValueKind with
+                                | JsonValueKind.String -> str step |> Option.defaultValue ""
+                                | _ -> step.ToString() ]
+                      | _ -> [] } ]
+        | _ -> []
+
+    /// The form GitHub answers for `Commit.file(path:)` when the commit's tree has no such path (CR-T21-01, seen live
+    /// in run 41340579555): a GraphQL error of type NOT_FOUND, "Could not resolve file for path '<path>'.".
+    let private missingPathPattern = Regex("^Could not resolve file for path '([^']+)'\\.?$", RegexOptions.CultureInvariant)
+
+    /// The file each aliased slot of the file-set query reads (GitHubRequests.fileSetAtBranch / fileSetAtCommit bind
+    /// `manifest`, `events` and `snapshot` to StoragePaths.manifest/events/snapshot of one investigation).
+    let private slotPath (slot: string) (dir: string) : string option =
+        match slot with
+        | "manifest" -> Some(dir + "manifest.json")
+        | "events" -> Some(dir + "events.ndjson")
+        | "snapshot" -> Some(dir + "snapshot.json")
+        | _ -> None
+
+    /// An investigation directory as StoragePaths.prefix writes it: `investigations/<lower-case guid>/`.
+    let private investigationDir = Regex("^investigations/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/", RegexOptions.CultureInvariant)
+
+    /// The path an absent-file error quotes, when it is exactly the path the query read for the slot the error names
+    /// (review T36 F-05): the error's response path ends in a slot alias, and the quoted text equals that slot's
+    /// storage path under an investigation directory. None for any other quoted path.
+    let private quotedSlotPath (e: GraphQLError) : string option =
+        let m = missingPathPattern.Match e.Message
+
+        if not m.Success then
+            None
+        else
+            let quoted = m.Groups.[1].Value
+            let dir = investigationDir.Match quoted
+
+            match List.tryLast e.Path with
+            | Some slot when dir.Success && slotPath slot dir.Value = Some quoted -> Some quoted
+            | _ -> None
+
+    let private dataAt (steps: string list) (body: JsonElement option) : JsonElement option =
+        steps
+        |> List.fold
+            (fun acc step ->
+                acc
+                |> Option.bind (fun (e: JsonElement) ->
+                    match e.ValueKind with
+                    | JsonValueKind.Object -> prop step e
+                    | JsonValueKind.Array ->
+                        match Int32.TryParse step with
+                        | true, i when i >= 0 && i < e.GetArrayLength() -> Some(e.[i])
+                        | _ -> None
+                    | _ -> None))
+            (body |> Option.bind (prop "data"))
+
+    /// The commit a file read answered at: `data.repository.ref.target.oid` (at a branch) or
+    /// `data.repository.object.oid` (at a named commit).
+    let private commitOidOfRead (body: JsonElement option) : string option =
+        dataAt [ "repository"; "ref"; "target"; "oid" ] body
+        |> Option.orElse (dataAt [ "repository"; "object"; "oid" ] body)
+        |> Option.bind str
+
+    /// R-07 (CR-T21-01): a file read at a commit that exists, where the error says the commit's tree has no such
+    /// path, says the file is absent; it is not a refusal. The matrix's GraphQL GH-NOT-FOUND is a missing branch or
+    /// ref, never a missing path inside a commit that was found. Only with the commit oid in the answer, and only when
+    /// the field the error names (if it names one) answered null; everything else keeps its class.
+    let isAbsentFile (body: JsonElement option) (e: GraphQLError) : bool =
+        e.Type = Some "NOT_FOUND"
+        && (quotedSlotPath e).IsSome
+        && (commitOidOfRead body).IsSome
+        && (match dataAt e.Path body with
+            | None -> true
+            | Some v -> v.ValueKind = JsonValueKind.Null)
+
+    /// The absent-file errors of one read are absorbed only together, and only when they all quote files of one
+    /// investigation: a read names one investigation's three paths, so errors quoting two directories cannot all be
+    /// the paths read (review T36 F-05).
+    let private absentFiles (body: JsonElement option) (errors: GraphQLError list) : GraphQLError list =
+        let absent = errors |> List.filter (isAbsentFile body)
+
+        let dirs =
+            absent
+            |> List.choose quotedSlotPath
+            |> List.map (fun p -> p.Substring(0, p.LastIndexOf '/' + 1))
+            |> List.distinct
+
+        match dirs with
+        | [ _ ] -> absent
         | _ -> []
 
     let private restMessage (body: JsonElement option) : string =
@@ -176,6 +271,10 @@ module ErrorMatrix =
     let private mentionsSecondary (message: string) =
         let m = message.ToLowerInvariant()
         m.Contains "secondary rate limit" || m.Contains "too quickly" || m.Contains "abuse"
+
+    /// A rate limit named in the message without the primary or secondary evidence (R-03): "API rate limit exceeded".
+    let private mentionsRateLimit (message: string) =
+        message.ToLowerInvariant().Contains "rate limit"
 
     let private validationTypes = set [ "UNPROCESSABLE"; "INVALID"; "INPUT_VALIDATION"; "ARGUMENT_ERROR" ]
 
@@ -212,18 +311,38 @@ module ErrorMatrix =
             | Some "diverged"
             | Some "behind" -> refuse GhHistoryRewritten (HistoryRewritten expected)
             | Some _ ->
-                let total = b |> prop "total_commits" |> Option.map (fun e -> e.GetInt32())
+                let total =
+                    b
+                    |> prop "total_commits"
+                    |> Option.bind (fun e ->
+                        match e.ValueKind with
+                        | JsonValueKind.Number ->
+                            match e.TryGetInt64() with
+                            | true, n -> Some n
+                            | _ -> None
+                        | _ -> None)
                 let listed =
-                    b |> prop "commits" |> Option.map (fun e -> if e.ValueKind = JsonValueKind.Array then e.GetArrayLength() else 0)
+                    b |> prop "commits" |> Option.map (fun e -> if e.ValueKind = JsonValueKind.Array then int64 (e.GetArrayLength()) else 0L)
 
                 match total, listed with
                 | Some t, Some l when t > l -> accept GhTruncatedList (id, status, rawBody)
                 | _ -> accept Accepted (id, status, rawBody)
             | None -> refuse GhMalformed (Malformed "compare answer has no status")
-        | (ConnectRepository | Read _), Some b ->
+        | ConnectRepository, Some b ->
+            match b |> prop "permissions" with
+            | Some p when p.ValueKind = JsonValueKind.Object -> accept Accepted (id, status, rawBody)
+            | _ -> refuse GhMalformed (Malformed "the repository answer has no permissions object")
+        | Read what, Some b ->
+            // R-06: a read is accepted only with the content it asked for: a file's content (or the large-file
+            // form), a ref's object sha, or a GraphQL read's data.
+            let hasString name (e: JsonElement) = e |> prop name |> Option.bind str |> Option.isSome
+
             match b |> prop "encoding" |> Option.bind str with
             | Some "none" -> accept GhLargeFile (id, status, rawBody)
-            | _ -> accept Accepted (id, status, rawBody)
+            | _ when hasString "content" b -> accept Accepted (id, status, rawBody)
+            | _ when b |> prop "object" |> Option.exists (hasString "sha") -> accept Accepted (id, status, rawBody)
+            | _ when b |> prop "data" |> Option.exists (fun d -> d.ValueKind = JsonValueKind.Object) -> accept Accepted (id, status, rawBody)
+            | _ -> refuse GhMalformed (Malformed(sprintf "the %s read has no content" what))
 
     /// Classify one outcome in its context: exactly one matrix class, by the matrix's precedence order
     /// (GH-AUTH, GH-RATE-PRIMARY, GH-RATE-SECONDARY, GH-STALE-HEAD, GH-LARGE-FILE, GH-PERMISSION, GH-VALIDATION,
@@ -234,7 +353,17 @@ module ErrorMatrix =
         | NotAnswered(_, failure) -> refuse GhNetworkAfter (NetworkUnavailable failure)
         | Answered(id, status, headers, rawBody) ->
             let body = tryParse rawBody
-            let errors = graphQLErrors body
+
+            let errors =
+                match context with
+                // R-07: on a read, a missing path inside a found commit is an absent file, decoded by the reader.
+                | Read _ ->
+                    let all = graphQLErrors body
+                    let absent = absentFiles body all
+                    all |> List.filter (fun e -> not (List.contains e absent))
+                | Mutation _
+                | ConnectRepository
+                | Compare _ -> graphQLErrors body
             let message = restMessage body
             let remaining = header "x-ratelimit-remaining" headers
             let retryAfter = header "retry-after" headers
@@ -248,9 +377,10 @@ module ErrorMatrix =
                     match movedHead e.Message with
                     | Some(actual, expected) -> Some(StaleHead(expected, Some actual))
                     | None when e.Type = Some "STALE_DATA" || expectedBranchForm e.Message ->
+                        // R-06: only a guarded mutation can be stale; elsewhere no expected head exists to name.
                         match context with
                         | Mutation expected -> Some(StaleHead(expected, None))
-                        | _ -> Some(StaleHead(CommitOid "", None))
+                        | _ -> None
                     | None -> None)
 
             let tooLarge =
@@ -267,6 +397,10 @@ module ErrorMatrix =
                 || gqlType "RATE_LIMITED"
             then
                 refuse GhRateSecondary (RateLimited(Secondary(tryInt retryAfter)))
+            elif status = 429 || (status = 403 && (mentionsRateLimit message || List.exists mentionsRateLimit gqlMessages)) then
+                // R-03: a 403 whose message names a rate limit is never a permission failure; with no remaining-0
+                // or retry-after evidence it is the primary limit (reset unknown unless the header says).
+                refuse GhRatePrimary (RateLimited(Primary(tryInt64 (header "x-ratelimit-reset" headers))))
             elif stale.IsSome then
                 refuse GhStaleHead stale.Value
             elif tooLarge then
@@ -302,6 +436,39 @@ module ErrorMatrix =
                 successBody context (id, status, rawBody) body
             else
                 refuse GhUnknownOutcome (Unrecognised status)
+
+    /// What a refused or unrecognised answer means for the path that sent it (R-05, matrix GH-NETWORK-AFTER,
+    /// GH-UNKNOWN-OUTCOME, GH-MALFORMED): for a mutation the outcome is unknown and must be reconciled; for a read
+    /// the read failed. Definite refusals (auth, permission, rate limit, stale head, validation, not found, history
+    /// rewritten) and accepted answers keep their class.
+    type Meaning =
+        | Definite
+        | UnknownMutationOutcome
+        | FailedBeforeSendingMeaning
+        | FailedRead
+
+    let meaning (context: AnswerContext) (classified: Classified) : Meaning =
+        let uncertain =
+            match classified.Class with
+            | GhNetworkAfter
+            | GhUnknownOutcome
+            | GhMalformed -> true
+            | _ -> false
+
+        match classified.Class, context with
+        | GhNetworkBefore, _ -> FailedBeforeSendingMeaning
+        | _, Mutation _ when uncertain -> UnknownMutationOutcome
+        | _, (ConnectRepository | Read _ | Compare _) when uncertain -> FailedRead
+        | _ -> Definite
+
+    /// `meaning`, with the one case the class alone cannot tell (review T36 F-06): an HTTP 404 from the GraphQL
+    /// endpoint on the mutation. The matrix's GH-NOT-FOUND for createCommitOnBranch is a GraphQL NOT_FOUND error
+    /// (branch missing); a bare 404 status names no branch, so its outcome is unknown and is reconciled (PERSIST-015),
+    /// never reported as "branch not found".
+    let meaningOf (context: AnswerContext) (outcome: HttpOutcome) (classified: Classified) : Meaning =
+        match context, outcome, classified.Class with
+        | Mutation _, Answered(_, 404, _, _), GhNotFound -> UnknownMutationOutcome
+        | _ -> meaning context classified
 
     /// The matrix classifier as the IF41-ERRORS Classifier type for one context.
     let classifier (context: AnswerContext) : Classifier = fun outcome -> (classify context outcome).Result

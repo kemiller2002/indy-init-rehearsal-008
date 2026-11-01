@@ -22,7 +22,8 @@ let private run (messages: string list) =
 
 let private view (json: string) = JsonDocument.Parse(json).RootElement.GetProperty "view"
 let private text (json: string) (key: string) = (view json).GetProperty(key).GetString()
-let private number (json: string) (key: string) = (view json).GetProperty(key).GetDouble()
+/// A count or version key: since CR-T22-1 (Views/Investigation.fs) these are Limen strings holding the integer.
+let private number (json: string) (key: string) = (view json).GetProperty(key).GetString() |> float
 
 [<Fact>]
 let ShimRoundTrip () =

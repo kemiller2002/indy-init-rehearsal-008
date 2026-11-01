@@ -34,5 +34,30 @@ test("renders the projection", async ({ page, causa, failures }) => {
     await expect(page.locator("[data-causa-screen]")).toHaveText(screen);
     await expect(page.locator("html")).toHaveAttribute("data-engine", "ready");
   }
+
+  // WI-R8-T22: the investigation workspace views read one projection of one history (ADRP-004): every region carries
+  // the same projection version, and observations, hypotheses, conclusions, blockers and the inspector follow it.
+  await causa.open("#/investigations/new");
+  const workspace = page.locator("[data-causa-workspace]");
+  const submit = (name) => workspace.getByRole("button", { name, exact: true }).click();
+  await expect(workspace.locator("[data-causa-evidence-list]")).toContainText("No evidence recorded yet.");
+  await expect(workspace.locator('[data-causa-region="inspector"]')).toBeHidden();
+  await submit("Start investigation");
+  await submit("Record an observation");
+  await submit("Activate");
+  await submit("Record a hypothesis");
+  await expect(workspace.locator("[data-causa-version]")).toHaveText("4");
+  await expect(workspace.locator("[data-causa-observation-list]")).toHaveText("Observation 1 (version 2)");
+  await expect(workspace.locator("[data-causa-hypothesis-list]")).toHaveText("Hypothesis 1 (version 4)");
+  await expect(workspace.locator("[data-causa-conclusion-list]")).toHaveText("No conclusion recorded yet.");
+  await expect(workspace.locator("[data-causa-inspector-kind]")).toHaveText("HypothesisRecorded");
+  await expect(workspace.locator("[data-causa-last-change]")).toHaveText("HypothesisRecorded at version 4");
+  await expect(workspace.locator("[data-causa-timeline-list]")).toContainText("1. InvestigationStarted; 2. ObservationRecorded");
+  // Unavailable actions stay discoverable with the kernel's reason (INVESTIGATION-WORKSPACE section 19).
+  await expect(workspace.locator('[data-causa-capability="StartInvestigation"]')).toContainText("Unavailable:");
+  await expect(workspace.locator("[data-causa-next-actions]")).not.toHaveText("");
+  const versions = await workspace.locator("[data-causa-region]").evaluateAll((els) => els.map((el) => el.getAttribute("data-projection-version")));
+  expect(versions.length).toBeGreaterThanOrEqual(8);
+  expect(new Set(versions)).toEqual(new Set(["4"]));
   expect(failures).toEqual([]);
 });

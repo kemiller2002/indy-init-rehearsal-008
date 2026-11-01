@@ -15,21 +15,18 @@ type ViewValue =
     | Text of string
     | Number of float
     | Flag of bool
+    /// A Limen data-each list: one flat record of string fields per row (WI-R8-T23 graph lists).
+    | Rows of (string * string) list list
 
 /// One complete Limen ViewState: every bound key, every time (never a patch).
 type ShellView = (string * ViewValue) list
-
-/// The kernel's answer to the last command this tab submitted.
-type Outcome =
-    | Accepted of command: Command * events: EventEnvelope list
-    | Refused of command: Command * decision: Decision
 
 /// The tab-local investigation: the events the kernel allowed, in order, and the last answer. Session-local: it is
 /// not saved anywhere (persistence is wired in later tasks), and the page says so.
 type Workspace =
     { History: EventEnvelope list
       Submissions: int
-      Last: Outcome option }
+      Last: SubmitOutcome option }
 
 /// What the wire layer knows: has Limen initialized us, where are we, and the tab's workspace.
 type ShellState =
@@ -37,12 +34,6 @@ type ShellState =
       Path: string
       Hash: string
       Workspace: Workspace }
-
-/// The one projection of a workspace history every dependent view reads.
-type WorkspaceProjection =
-    { State: InvestigationState option
-      Capabilities: Capability list
-      Fault: string option }
 
 [<RequireQualifiedAccess>]
 module Workspace =
@@ -73,24 +64,6 @@ module Workspace =
     let commandOfEvent (name: string) : Command option =
         Command.all |> List.tryFind (fun c -> eventName c = name)
 
-    /// Pure: the one projection of a history. An empty history is "no investigation yet".
-    let project (history: EventEnvelope list) : WorkspaceProjection =
-        match history with
-        | [] ->
-            { State = None
-              Capabilities = Capabilities.derive policy actor None
-              Fault = None }
-        | _ ->
-            match Kernel.replayState history with
-            | Ok state ->
-                { State = Some state
-                  Capabilities = Capabilities.derive policy actor (Some state)
-                  Fault = None }
-            | Error error ->
-                { State = None
-                  Capabilities = []
-                  Fault = Some(sprintf "The history does not replay: %A" error) }
-
 module View =
     /// The engine identity the page and the smoke tests read (DEP-CURRENT-004 Limen startup).
     [<Literal>]
@@ -102,93 +75,39 @@ module View =
           Hash = ""
           Workspace = Workspace.empty }
 
-    let private lifecycleName (lifecycle: InvestigationLifecycle) =
-        match lifecycle with
-        | Draft -> "Draft"
-        | Active -> "Active"
-        | AwaitingEvidence -> "Awaiting evidence"
-        | AwaitingVerification -> "Awaiting verification"
-        | Resolved -> "Resolved"
-        | Closed -> "Closed"
-        | Archived -> "Archived"
+    /// The page link of the tab-local investigation (it lives on the start screen until it is saved).
+    let private tabInvestigationHref = Routes.format AppRoute.InvestigationStart
 
-    let private kindOf (event: EventEnvelope) =
-        let (EventPayload kind) = event.Payload
-        kind
+    let private tabOf (hash: string) =
+        match Routes.parse hash with
+        | AppRoute.Investigation(_, _, tab) -> Some tab
+        | _ -> None
 
-    let private versionOf (state: InvestigationState option) =
-        match state with
-        | Some s ->
-            let (AggregateVersion v) = s.Version
-            float v
-        | None -> 0.0
+    /// Pure: the workspace's keys (Views/Investigation.fs, WI-R8-T22), all from one projection of one history, with
+    /// the save indicator and header of a tab that has no repository connected (its changes exist only in this tab).
+    let renderWorkspace (hash: string) (workspace: Workspace) : Views.ShellKeys =
+        let changes = workspace.History.Length
+        let notSaved = if changes = 0 then [] else [ Workspace.investigation, tabInvestigationHref ]
 
-    let private blockerText (blockers: Blocker list) =
-        blockers |> List.map (fun b -> $"{b.Message} ({b.Code})") |> String.concat " "
+        Views.Investigation.keys Workspace.policy Workspace.actor (tabOf hash) workspace.History workspace.Last
+        @ Views.SaveIndicator.keys (Views.SaveIndicator.forTab Workspace.investigation changes)
+        @ Views.WorkspaceHeader.keys (Views.WorkspaceHeader.forTab Disconnected false notSaved)
+        @ Views.ConflictReview.keys None
 
-    /// Pure: a refused decision as the sentence the page shows, with the kernel's reason.
-    let refusalText (decision: Decision) =
-        match decision with
-        | Allowed _ -> "Allowed."
-        | Blocked blockers -> blockerText blockers
-        | RequiresReview reasons -> "Needs review: " + String.concat " " reasons
-        | UnsupportedSemantics names -> "Unsupported semantics: " + String.concat ", " names
-        | Conflict(AggregateVersion e, AggregateVersion a) ->
-            $"The investigation changed: expected version {e}, found version {a} (version-conflict)."
-        | Duplicate _ -> "This command was already applied (duplicate)."
-
-    let private outcomeKeys (last: Outcome option) : ShellView =
-        let state, text =
-            match last with
-            | None -> "none", "No command sent yet."
-            | Some(Accepted(command, events)) ->
-                let kinds = events |> List.map kindOf |> String.concat ", "
-                "accepted", $"{Command.name command} accepted: {kinds}."
-            | Some(Refused(command, decision)) -> "refused", $"{Command.name command} refused: {refusalText decision}"
-        [ "outcomeState", Text state; "outcomeText", Text text ]
-
-    let private stateKeys (projection: WorkspaceProjection) (history: EventEnvelope list) : ShellView =
-        let count f =
-            projection.State |> Option.map f |> Option.defaultValue 0 |> float
-
-        let lifecycle =
-            projection.State
-            |> Option.map (fun s -> lifecycleName s.Lifecycle)
-            |> Option.defaultValue "No investigation"
-
-        [ "projectionVersion", Number(versionOf projection.State)
-          "investigationLifecycle", Text lifecycle
-          "timelineCount", Number(float history.Length)
-          "timelineLatest", Text(history |> List.tryLast |> Option.map kindOf |> Option.defaultValue "No events")
-          "observationCount", Number(count _.Observations)
-          "conclusionCount", Number(count _.Conclusions)
-          "projectionFault", Text(projection.Fault |> Option.defaultValue "")
-          "projectionFaultHidden", Flag projection.Fault.IsNone ]
-
-    let private capabilityText (projection: WorkspaceProjection) (command: Command) =
-        match projection.Capabilities |> List.tryFind (fun c -> c.Command = command) with
-        | Some { Availability = Available } -> "Available"
-        | Some { Availability = Unavailable blockers } -> "Unavailable: " + blockerText blockers
-        | None -> "Unavailable: the investigation could not be read."
-
-    /// One key per offered command: "Available", or the kernel's reason it is not.
-    let private capabilityKeys (projection: WorkspaceProjection) : ShellView =
-        Workspace.offered
-        |> List.map (fun command -> "capability" + Command.name command, Text(capabilityText projection command))
-
-    /// Pure: the workspace's keys, all from one projection of one history.
-    let renderWorkspace (workspace: Workspace) : ShellView =
-        let projection = Workspace.project workspace.History
-        stateKeys projection workspace.History
-        @ capabilityKeys projection
-        @ outcomeKeys workspace.Last
-
-    let private shellKeys (hash: string) : ShellView =
-        Views.Shell.projectHash hash
+    let private flat (keys: Views.ShellKeys) : ShellView =
+        keys
         |> List.map (fun (name, value) ->
             match value with
             | Views.Str s -> name, Text s
             | Views.Bit b -> name, Flag b)
+
+    let private shellKeys (hash: string) : ShellView = flat (Views.Shell.projectHash hash)
+
+    /// The causal graph's keys and lists (Views/Graph.fs, ui-2), from the same workspace history the investigation
+    /// keys replay (Workspace.History, unchanged by WI-R8-T22's restructuring).
+    let private graphKeys (workspace: Workspace) : ShellView =
+        let graph = Views.Graph.project workspace.History
+        flat graph.Keys @ (graph.Lists |> List.map (fun (name, rows) -> name, Rows rows))
 
     /// Pure: state to the complete view.
     let render (state: ShellState) : ShellView =
@@ -198,4 +117,5 @@ module View =
           "status", Text(if state.Booted then "Causa engine ready" else "Loading Causa")
           "path", Text state.Path ]
         @ shellKeys state.Hash
-        @ renderWorkspace state.Workspace
+        @ flat (renderWorkspace state.Hash state.Workspace)
+        @ graphKeys state.Workspace

@@ -87,3 +87,167 @@ module Producer =
 
         for (c, bound) in matrix do
             Assert.Equal(bound, maxAttempts c)
+
+    /// CR-T21-01: GitHub answers `Commit.file(path:)` for a path the commit lacks with a null field and a NOT_FOUND
+    /// error. On a read at a found commit that is an absent file, not a refusal; the matrix's GraphQL GH-NOT-FOUND is
+    /// a missing branch or ref.
+    [<Fact>]
+    let MissingPathInAFoundCommitIsAnAbsentFile () =
+        Assert.NotEmpty Recordings.readForms
+
+        for r in Recordings.readForms do
+            let got = classify (Read r.Operation) (Recordings.asOutcome (RequestId 8L) r)
+            Assert.True((classId got.Class = r.MatrixClass), sprintf "%s: expected %s, classified %s" r.Name r.MatrixClass (classId got.Class))
+
+        let oid = String.replicate 40 "c"
+        let dir = "investigations/00000000-0000-4000-8000-000000000001"
+        let at body = classify (Read "graphql:fileSet") (Answered(RequestId 9L, 200, [], body))
+        Assert.Equal(Accepted, (at (Recordings.missingFileSetBody oid dir)).Class)
+
+        // A missing ref stays GH-NOT-FOUND on a read, and a missing path with no commit in the answer is not absorbed.
+        Assert.Equal(GhNotFound, (at """{"data":{"repository":{"ref":null}},"errors":[{"type":"NOT_FOUND","message":"Could not resolve to a Ref"}]}""").Class)
+
+        let noCommit =
+            """{"data":{"repository":{"ref":{"target":null}}},"errors":[{"type":"NOT_FOUND","path":["repository","ref","target","manifest"],"message":"Could not resolve file for path 'x/manifest.json'."}]}"""
+
+        Assert.Equal(GhNotFound, (at noCommit).Class)
+
+        // The error must name a field that answered null: a missing-path error on a field that holds a file is refused.
+        let present =
+            sprintf
+                """{"data":{"repository":{"ref":{"target":{"oid":"%s","manifest":{"object":{"text":"{}","isTruncated":false}}}}}},"errors":[{"type":"NOT_FOUND","path":["repository","ref","target","manifest"],"message":"Could not resolve file for path 'x/manifest.json'."}]}"""
+                oid
+
+        Assert.Equal(GhNotFound, (at present).Class)
+
+        // Any other error alongside keeps its class; a mutation never absorbs the form.
+        let mixed =
+            sprintf
+                """{"data":{"repository":{"ref":{"target":{"oid":"%s","manifest":null}}}},"errors":[{"type":"NOT_FOUND","path":["repository","ref","target","manifest"],"message":"Could not resolve file for path 'x/manifest.json'."},{"type":"FORBIDDEN","message":"no"}]}"""
+                oid
+
+        Assert.Equal(GhPermission, (at mixed).Class)
+        Assert.Equal(GhNotFound, (classify (Mutation expected) (Answered(RequestId 9L, 200, [], Recordings.missingFileSetBody oid dir))).Class)
+
+    let private investigation = Causa.Domain.InvestigationId(System.Guid "00000000-0000-4000-8000-000000000001")
+
+    let private connection: ConnectionContext =
+        { Repository = { Owner = "fake-owner"; Name = "fake-repo"; Branch = "main" }
+          Credential = Credential.create "producer-test-token-not-a-credential" }
+
+    /// CR-T21-01: opening an investigation with no files, against the live answer form and against the stateful fake
+    /// (which answers a missing path as GitHub does), is AuthorizedEmpty at the head; never OpenRefused.
+    [<Fact>]
+    let OpenOfANewInvestigationIsAuthorizedEmpty () =
+        let oid = String.replicate 40 "c"
+        let dir = "investigations/00000000-0000-4000-8000-000000000001"
+
+        match GitHubProvider.interpretOpen StorageV1.codec (Answered(RequestId 10L, 200, [], Recordings.missingFileSetBody oid dir)) with
+        | AuthorizedEmpty(CommitOid at) -> Assert.Equal(oid, at)
+        | other -> failwithf "live form: expected AuthorizedEmpty, got %A" other
+
+        let server = Conformance.newFake ()
+        let head = (StatefulFake.head "main" server.State).Value
+        let answer = server.Execute(GitHubProvider.openRequest (RequestId 11L) connection investigation)
+
+        match answer with
+        | Answered(_, 200, _, body) -> Assert.Contains("Could not resolve file for path", body)
+        | other -> failwithf "the fake must answer the missing paths with GitHub's errors, got %A" other
+
+        Assert.Equal(AuthorizedEmpty head, GitHubProvider.interpretOpen StorageV1.codec answer)
+
+    /// CR-T21-01: partial presence still fails closed: one file present and two missing is Incompatible, naming the
+    /// missing files.
+    [<Fact>]
+    let PartialFileSetIsIncompatible () =
+        let (RepoPath manifest) = StoragePaths.manifest investigation
+        let files = StorageV1.encodeHistory investigation []
+
+        let server =
+            StatefulFake.Server(StatefulFake.create "fake-owner" "fake-repo" "main" [ manifest, files.Manifest ])
+
+        let answer = server.Execute(GitHubProvider.openRequest (RequestId 12L) connection investigation)
+
+        match GitHubProvider.interpretOpen StorageV1.codec answer with
+        | Incompatible(_, failures) -> Assert.Equal(2, List.length failures)
+        | other -> failwithf "expected Incompatible, got %A" other
+
+    /// Review T36 F-05: the absent-file rule absorbs a missing-path error only when the quoted path is exactly the
+    /// path the query read for the slot the error names, and all absorbed errors quote one investigation.
+    [<Fact>]
+    let AbsentFileErrorMustQuoteThePathRead () =
+        let oid = String.replicate 40 "c"
+        let at body = (classify (Read "graphql:fileSet") (Answered(RequestId 13L, 200, [], body))).Class
+        let dir = "investigations/00000000-0000-4000-8000-000000000001/"
+
+        let one (slot: string) (quoted: string) =
+            sprintf
+                """{"data":{"repository":{"ref":{"target":{"oid":"%s","%s":null}}}},"errors":[{"type":"NOT_FOUND","path":["repository","ref","target","%s"],"message":"Could not resolve file for path '%s'."}]}"""
+                oid
+                slot
+                slot
+                quoted
+
+        Assert.Equal(Accepted, at (one "manifest" (dir + "manifest.json")))
+        Assert.Equal(Accepted, at (one "snapshot" (dir + "snapshot.json")))
+        // Another path, another slot's file, a path outside an investigation, or no field named: refused.
+        Assert.Equal(GhNotFound, at (one "manifest" "some/other/path.json"))
+        Assert.Equal(GhNotFound, at (one "manifest" (dir + "events.ndjson")))
+        Assert.Equal(GhNotFound, at (one "manifest" "investigations/not-a-guid/manifest.json"))
+
+        let noPath =
+            sprintf
+                """{"data":{"repository":{"ref":{"target":{"oid":"%s","manifest":null}}}},"errors":[{"type":"NOT_FOUND","message":"Could not resolve file for path '%smanifest.json'."}]}"""
+                oid
+                dir
+
+        Assert.Equal(GhNotFound, at noPath)
+
+        // Two investigations quoted in one read cannot both be the paths read.
+        let other = "investigations/00000000-0000-4000-8000-000000000002/"
+
+        let mixed =
+            sprintf
+                """{"data":{"repository":{"ref":{"target":{"oid":"%s","manifest":null,"events":null}}}},"errors":[{"type":"NOT_FOUND","path":["repository","ref","target","manifest"],"message":"Could not resolve file for path '%smanifest.json'."},{"type":"NOT_FOUND","path":["repository","ref","target","events"],"message":"Could not resolve file for path '%sevents.ndjson'."}]}"""
+                oid
+                dir
+                other
+
+        Assert.Equal(GhNotFound, at mixed)
+
+    /// Review T36 F-01 (contract): GitHub's compare answer lists at most 300 files and flags no truncation, so a list
+    /// at the cap is not a complete list, even with every commit listed.
+    [<Fact>]
+    let CompareFileListAtTheCapIsNotComplete () =
+        let body files =
+            let names = [ for i in 1..files -> sprintf """{"filename":"bulk/%04d.json"}""" i ] |> String.concat ","
+            sprintf """{"status":"ahead","total_commits":1,"commits":[{"sha":"%s","commit":{"message":"bulk"}}],"files":[%s]}""" (String.replicate 40 "d") names
+
+        let complete files =
+            let outcome = Answered(RequestId 14L, 200, [], body files)
+            let got = classify (Compare expected) outcome
+            Assert.Equal(Accepted, got.Class)
+
+            match got.Result with
+            | Ok a -> Answers.compare a.Body |> Option.bind CompareView.completeFiles
+            | Error e -> failwithf "compare refused: %A" e
+
+        Assert.Equal(None, complete 300)
+        Assert.Equal(None, complete 301)
+        Assert.Equal(Some 299, complete 299 |> Option.map List.length)
+
+    /// Review T36 F-06: a bare 404 from the GraphQL endpoint on the mutation keeps its matrix class but means an
+    /// unknown outcome (reconciled), not a definite "branch not found"; a GraphQL NOT_FOUND error stays definite.
+    [<Fact>]
+    let MutationEndpoint404MeansUnknownOutcome () =
+        let notFound = Answered(RequestId 15L, 404, [], """{"message":"Not Found"}""")
+        Assert.Equal(UnknownMutationOutcome, meaningOf (Mutation expected) notFound (classify (Mutation expected) notFound))
+
+        let branchMissing =
+            Answered(RequestId 16L, 200, [], """{"data":{"createCommitOnBranch":null},"errors":[{"type":"NOT_FOUND","message":"Could not resolve to a Ref"}]}""")
+
+        let classified = classify (Mutation expected) branchMissing
+        Assert.Equal(GhNotFound, classified.Class)
+        Assert.Equal(Definite, meaningOf (Mutation expected) branchMissing classified)
+        // A 404 on a read stays a definite not-found.
+        Assert.Equal(Definite, meaningOf (Read "rest:contents") notFound (classify (Read "rest:contents") notFound))

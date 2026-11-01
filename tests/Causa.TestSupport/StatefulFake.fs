@@ -130,6 +130,12 @@ module StatefulFake =
         let expected = CommitOid((input["expectedHeadOid"] |> nonNull).GetValue<string>())
         let headline = input["message"] |> nonNull |> fun m -> (m["headline"] |> nonNull).GetValue<string>()
 
+        // GitHub keeps the whole message: headline, blank line, body (T19: the write-marker trailer is in the body).
+        let headline =
+            match input["message"] |> nonNull |> fun m -> m["body"] with
+            | null -> headline
+            | body -> headline + "\n\n" + body.GetValue<string>()
+
         let additions =
             match input["fileChanges"] |> Option.ofObj |> Option.bind (fun f -> f["additions"] |> Option.ofObj) with
             | Some(:? JsonArray as arr) ->
@@ -202,8 +208,87 @@ module StatefulFake =
                 arr.Add item
 
             o["commits"] <- arr
+
+            // The files changed between base and head, as GitHub lists them (T19 compares the investigation's files).
+            let changed =
+                Set.union (Set.ofSeq b.Tree.Keys) (Set.ofSeq h.Tree.Keys)
+                |> Set.filter (fun p ->
+                    match b.Tree.TryFind p, h.Tree.TryFind p with
+                    | Some x, Some y -> x <> y
+                    | _ -> true)
+
+            let files = JsonArray()
+
+            // GitHub lists at most 300 changed files for the whole comparison, with no truncation flag (review T36 F-01).
+            for p in changed |> Seq.truncate 300 do
+                let f = JsonObject()
+                f["filename"] <- JsonValue.Create p
+                files.Add f
+
+            o["files"] <- files
             json id 200 o
         | _ -> message id 404 "Not Found"
+
+    /// T19: the GraphQL file-set query (GitHubRequests.fileSetAtBranch / fileSetAtCommit): the commit and three files.
+    let private fileSetQuery (id: RequestId) (body: string) (state: FakeState) : HttpOutcome =
+        let vars = (JsonNode.Parse body |> nonNull)["variables"] |> nonNull
+        let text (name: string) = vars[name] |> Option.ofObj |> Option.map (fun v -> v.GetValue<string>())
+
+        let commit =
+            match text "oid", text "ref" with
+            | Some oid, _ -> state.Commits.TryFind oid
+            | None, Some r -> state.Branches.TryFind(r.Replace("refs/heads/", "")) |> Option.bind (fun (CommitOid o) -> state.Commits.TryFind o)
+            | None, None -> None
+
+        let repo = JsonObject()
+        let errors = JsonArray()
+
+        match commit with
+        | Some c ->
+            let target = JsonObject()
+            target["oid"] <- JsonValue.Create(key c.Oid)
+            // CR-T21-01 (PF-013): GitHub answers `file(path:)` for a path the commit lacks with a null field and a
+            // NOT_FOUND error naming it, never a bare null; the fake answers the same way.
+            let targetPath =
+                match text "oid" with
+                | Some _ -> [ "repository"; "object" ]
+                | None -> [ "repository"; "ref"; "target" ]
+
+            for slot in [ "manifest"; "events"; "snapshot" ] do
+                match text slot with
+                | Some p ->
+                    match c.Tree.TryFind p with
+                    | Some bytes ->
+                        let blob = JsonObject()
+                        blob["text"] <- JsonValue.Create(Encoding.UTF8.GetString bytes)
+                        blob["isTruncated"] <- JsonValue.Create false
+                        let entry = JsonObject()
+                        entry["object"] <- blob
+                        target[slot] <- entry
+                    | None ->
+                        target[slot] <- null
+                        errors.Add(Recordings.missingPathError (targetPath @ [ slot ]) p)
+                | None -> target[slot] <- null
+
+            match text "oid" with
+            | Some _ -> repo["object"] <- target
+            | None ->
+                let r = JsonObject()
+                r["target"] <- target
+                repo["ref"] <- r
+        | None ->
+            repo["ref"] <- null
+            repo["object"] <- null
+
+        let data = JsonObject()
+        data["repository"] <- repo
+        let o = JsonObject()
+        o["data"] <- data
+
+        if errors.Count > 0 then
+            o["errors"] <- errors
+
+        json id 200 o
 
     let private apply (request: HttpRequest) (state: FakeState) : FakeState * HttpOutcome =
         let id = request.Id
@@ -213,7 +298,8 @@ module StatefulFake =
         let rest (p: string) = if p.StartsWith repoPrefix then Some(p.Substring repoPrefix.Length) else None
 
         match request.Method, path, request.Body with
-        | Post, "/graphql", Some body -> createCommit id body state
+        | Post, "/graphql", Some body when body.Contains "createCommitOnBranch" -> createCommit id body state
+        | Post, "/graphql", Some body -> state, fileSetQuery id body state
         | Get, p, _ when rest p = Some "" ->
             let o = JsonObject()
             o["full_name"] <- JsonValue.Create(state.Owner + "/" + state.Name)
@@ -489,3 +575,63 @@ module Conformance =
           Credential = Credential.create "fake-credential" }
 
     let newFake () = StatefulFake.Server(StatefulFake.create "fake-owner" "fake-repo" "main" [ "README.md", Encoding.UTF8.GetBytes "fake" ])
+
+/// T19: the stateful fake as the invariant suite's FakeGitHub needs it (INV-09): one branch holding one verified
+/// investigation, an external writer touching other files, and the commit graph.
+[<RequireQualifiedAccess>]
+module InvariantFake =
+    type Handle =
+        { Server: StatefulFake.Server
+          Branch: string
+          Investigation: Causa.Domain.InvestigationId }
+
+    let create (owner: string) (name: string) (branch: string) (investigation: Causa.Domain.InvestigationId) : Handle =
+        let event: Causa.Domain.EventEnvelope =
+            { EventId = Causa.Domain.EventId(Guid "00000000-0000-4000-8000-00000000f001")
+              Investigation = investigation
+              Version = Causa.Domain.AggregateVersion 1L
+              Payload = Causa.Domain.EventPayload "InvestigationStarted" }
+
+        let files = StorageV1.encodeHistory investigation [ event ]
+        let file (RepoPath p) bytes = p, bytes
+
+        let tree =
+            [ file (StoragePaths.manifest investigation) files.Manifest
+              file (StoragePaths.events investigation) files.Events
+              file (StoragePaths.snapshot investigation) files.Snapshot ]
+
+        { Server = StatefulFake.Server(StatefulFake.create owner name branch tree)
+          Branch = branch
+          Investigation = investigation }
+
+    let head (h: Handle) : CommitOid = h.Server.State.Branches[h.Branch]
+
+    /// The investigation verified at the branch head, as a load reads it.
+    let openAtHead (h: Handle) : VerifiedInvestigation =
+        let at = head h
+        let (CommitOid oid) = at
+        let tree = h.Server.State.Commits[oid].Tree
+        let read (RepoPath p) = tree[p]
+
+        let files =
+            { Manifest = read (StoragePaths.manifest h.Investigation)
+              Events = read (StoragePaths.events h.Investigation)
+              Snapshot = read (StoragePaths.snapshot h.Investigation) }
+
+        match StorageV1.verify at files with
+        | Ok verified -> verified
+        | Error failures -> failwithf "the fake's investigation does not verify: %A" failures
+
+    let mutable private externalCount = 0
+
+    /// Another writer commits an unrelated file.
+    let externalCommit (h: Handle) : CommitOid =
+        let n = Threading.Interlocked.Increment(&externalCount)
+        h.Server.Mutate(StatefulFake.commitOnBranch h.Branch "external writer" [ sprintf "other/external-%d.txt" n, Encoding.UTF8.GetBytes(string n) ])
+
+    /// Every commit except the root.
+    let created (h: Handle) : CommitOid list =
+        h.Server.State.Commits |> Map.toList |> List.filter (fun (_, c) -> not c.Parents.IsEmpty) |> List.map (fun (_, c) -> c.Oid)
+
+    let reachableFromHead (h: Handle) (CommitOid oid) : bool =
+        (StatefulFake.ancestors (head h) h.Server.State).Contains oid

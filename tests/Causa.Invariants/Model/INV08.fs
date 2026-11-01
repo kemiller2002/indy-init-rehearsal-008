@@ -27,17 +27,28 @@ module Bindings =
     /// The F# kernel (IF41-DOMAIN), T13 (domain).
     let kernel: DomainKernel option = Some Kernel.domain
     /// SM-SAVE, SM-CONFLICT and SM-LOAD (IF41-SAVE), persistence.
-    let saveMachine: SaveMachine option = None
+    let saveMachine: SaveMachine option = Some(SaveProcess.forNewTab ())
     /// causa-storage v1.0.0 codec (IF41-STORAGE), persistence.
-    let storageCodec: StorageCodec option = None
-    /// The github-error-matrix classifier (IF41-ERRORS), persistence.
-    let classifier: Classifier option = None
+    let storageCodec: StorageCodec option = Some StorageV1.codec
+    /// The github-error-matrix classifier (IF41-ERRORS), persistence, per answer context (a 404 means different
+    /// things for Connect, a read, a compare and a mutation; review T35 R-01).
+    let classifier: (ErrorMatrix.AnswerContext -> Classifier) option = Some ErrorMatrix.classifier
     /// The view projections (IF41-VIEW), ui.
-    let projections: Projections option = None
+    let projections: Projections option = Some Projection.value
     /// The App engine (IF41-APP), ui.
     let engine: Engine option = None
     /// The stateful GitHub fake (tests/Causa.TestSupport/StatefulFake.fs), persistence: a fresh fake per call.
-    let statefulFake: (unit -> FakeGitHub) option = None
+    let statefulFake: (unit -> FakeGitHub) option =
+        Some(fun () ->
+            let fake =
+                Causa.TestSupport.InvariantFake.create "kemiller2002" "causa-data" "main" (InvestigationId(Guid "00000000-0000-4000-8000-000000000001"))
+
+            { Execute = fake.Server.Execute
+              Open = fun () -> Causa.TestSupport.InvariantFake.openAtHead fake
+              ExternalCommit = fun () -> Causa.TestSupport.InvariantFake.externalCommit fake
+              Head = fun () -> Causa.TestSupport.InvariantFake.head fake
+              Created = fun () -> Causa.TestSupport.InvariantFake.created fake
+              ReachableFromHead = Causa.TestSupport.InvariantFake.reachableFromHead fake })
 
 module Require =
     let bound (contract: string) (owner: string) (binding: 'a option) : 'a =
