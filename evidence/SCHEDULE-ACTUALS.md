@@ -19,5 +19,18 @@
 | T17 integration checkpoint 1 (chromium + webkit) | integration | 129 | 19:02 | 91 | #15 |
 | CI live fix (live suites never ran: MSB1008) | integration | — | 19:05 | 94 | #16 |
 | T27 AI proposal boundaries | domain | 159 | 19:08 | 97 | #17 |
+| T25 catalog after Connect | persistence | 184 | 19:16 | 105 | #18 |
+| T21 checkpoint 2 (live PAT tests) | integration | 189 | 19:33 | 122 | #19 |
+| CR-T21-01 live P0 fix (missing path) | persistence | — | 19:40 | 129 | #23 |
+| T23 causal graph (+CRs) | ui-2 / integration | 159 | 19:41 | 130 | #22 (#20) |
+| Pages deploy gate; first verified deployment b45e969 | integration | — | 19:40 | 129 | #24 |
+| T36 review checkpoint 2 | reviewer | 204 | 19:44 | 133 | #26 |
+| T36 fixes (compare truncation) | persistence | — | 19:54 | 143 | #27 |
+| T22 investigation workspace (+CR-T22-1) | ui / integration | 199 | 20:01 | 150 | #28 (#21) |
+| T22B engine Connect/open/save | ui | — | 20:14 | 163 | #29 |
+| T30 pre-RC review | reviewer | 224 | 20:16 | 165 | #30 |
+| T26 report + Folio (+CRs) | ui-2 / integration | 184 | 20:18 | 167 | #32 (#25) |
+| CI output capture / live filter (T30 F-02, F-06) | integration | — | 20:33 | 182 | #31 |
+| T28 history, time travel, semantic diff (+CR) | ui-2 / integration | 249 | 20:41 | 190 | #34 (#33) |
 
-In flight at 19:10 (T+99): T22 ui (critical path; plan finish T+199), T23 ui-2 (plan T+159), T21 integration (plan T+189), T25 persistence PR #18 in CI (plan T+184).
+In flight at 20:41 (T+190): T29 ui-2 (plan T+204), CR-T22B connect/save from the page, UIFIX (ui P0 specs, carries #35). Next: T31 release candidate (plan start T+249).

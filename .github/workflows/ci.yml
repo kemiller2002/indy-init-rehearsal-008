@@ -67,6 +67,7 @@ jobs:
         run: |
           set -uo pipefail
           export CAUSA_DATA_ROOT="$GITHUB_WORKSPACE/causa-data"
+          set +e  # GitHub runs bash -e: capture the status and print output before deciding (review T30 F-02)
           output=$(dotnet test Causa.slnx -c Release --no-build --filter "FullyQualifiedName!~.Live.&FullyQualifiedName!~Causa.Invariants." --logger trx --results-directory TestResults 2>&1)
           status=$?
           echo "$output"
@@ -90,6 +91,7 @@ jobs:
         continue-on-error: true
         run: |
           set -uo pipefail
+          set +e  # GitHub runs bash -e: capture the status and print output before deciding (review T30 F-02)
           output=$(dotnet test tests/Causa.Invariants -c Release --no-build --filter "FullyQualifiedName!~.Live." --logger "trx;LogFileName=invariants.trx" --results-directory TestResults 2>&1)
           status=$?
           echo "$output" | tail -40
