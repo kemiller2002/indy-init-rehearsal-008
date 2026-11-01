@@ -1,14 +1,23 @@
-// Owner: ui (WI-R8-UIP0). INV-06: no investigation content, unsaved change, save state, branch head, write marker or
-// credential is written to any browser store or cross-tab channel.
+// Owner: ui (WI-R8-UIP0, WI-R8-UTESTS). INV-06: no investigation content, unsaved change, save state, branch head,
+// write marker or credential is written to any browser store or cross-tab channel, and no Web Locks API is used.
 import { expect, test } from "../support/fixtures.js";
 
-test("INV-06", async ({ page, causa }) => {
+test("every store empty of investigation content", async ({ page, causa }) => {
   // Record every cross-tab message and store write the page attempts, from before the app starts.
   await page.addInitScript(() => {
     window.__causaChannel = [];
     const Native = window.BroadcastChannel;
     if (Native) window.BroadcastChannel = class extends Native { postMessage(m) { window.__causaChannel.push(String(m)); return super.postMessage(m); } };
     window.addEventListener("storage", () => window.__causaChannel.push("storage-event"));
+    // INV-06: no Web Locks API is used (correctness never depends on cross-tab coordination).
+    window.__causaLocks = [];
+    if (navigator.locks) {
+      const locks = navigator.locks;
+      for (const name of ["request", "query"]) {
+        const native = locks[name].bind(locks);
+        locks[name] = (...args) => { window.__causaLocks.push(name); return native(...args); };
+      }
+    }
   });
   await causa.open("#/investigations/new");
   const ws = page.locator("[data-causa-workspace]");
@@ -22,9 +31,13 @@ test("INV-06", async ({ page, causa }) => {
     cookie: document.cookie,
     idb: indexedDB.databases ? (await indexedDB.databases()).map((d) => d.name) : [],
     caches: "caches" in window ? await caches.keys() : [],
-    channel: window.__causaChannel
+    opfs: navigator.storage && navigator.storage.getDirectory
+      ? await (async () => { const names = []; for await (const k of (await navigator.storage.getDirectory()).keys()) names.push(k); return names; })()
+      : [],
+    channel: window.__causaChannel,
+    locks: window.__causaLocks
   }));
-  expect(stores).toEqual({ local: [], session: [], cookie: "", idb: [], caches: [], channel: [] });
+  expect(stores).toEqual({ local: [], session: [], cookie: "", idb: [], caches: [], opfs: [], channel: [], locks: [] });
   // A reload starts from nothing: nothing survived in any store.
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-engine", "ready", { timeout: 30_000 });
