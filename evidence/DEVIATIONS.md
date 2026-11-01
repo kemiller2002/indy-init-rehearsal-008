@@ -52,3 +52,17 @@ DEV-R8-01..03: see evidence/T0-START.json (pre-existing repository; no `conditor
 
 ## CR-T17-01 declined (frozen IF41-APP)
 - `Msg.DomainCommand of CommandEnvelope` cannot carry the command body (same gap as DEV-R8-09). The ui lane implements additive submission functions beside the frozen `Update`. Program.fs's interim `Submit`/`Workspace` (T17) is retired through a ui CR. Reported to the owner as a frozen-contract finding.
+
+## DEV-R8-12 — SM-SAVE (UnknownOutcome × ReconcileReadFailed) after the last read maps to T-S30 (T33-F-04; coordinator ratified)
+- WI-R8-T32P (#48): when the last automatic reconciliation read, or a Check again read, fails, the frozen SM-SAVE table has no legal transition for (UnknownOutcome, ReconcileReadFailed) with no reads left, so the step faulted and left a request marked outstanding (the session could never progress).
+- T32P maps that pair, in `Session.step` (not `interpret`, so INV03 still sees ReconcileReadFailed), to the effects of T-S30 ReconcileReadsSpent: offer Check again, nothing outstanding, nothing sent. T33 found this was not recorded as a deviation.
+- Coordinator decision: ratified for this run as the fail-safe reading of T-S30 (no write, no guess, user-driven retry). The frozen table is unchanged; reported to the owner as a state-machine gap: SM-SAVE should state the transition for a failed final reconcile read.
+
+## T33 findings disposition (coordinator)
+- T33-F-01 large-file read-back: assigned to persistence, WI-R8-T32L.
+- T33-F-02 token held as plain text in `HttpRequest.Headers` (latent; no leak path found): not changed in this run (frozen IF41 wire shape); reported in FINAL-REPORT as a P1 risk.
+- T33-F-03 stale T31 matrix: T34 regenerates the matrix at the final candidate.
+- T33-F-04: DEV-R8-12 above.
+- T33-F-05/F-06: notes, recorded.
+- T33-F-07: fixed in #51 before merge.
+- T33-F-08 WebKit INV-06/INV-21: harness fix CR-T33-F08 (#50); result taken from the candidate's webkit job.

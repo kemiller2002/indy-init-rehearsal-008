@@ -33,4 +33,18 @@
 | CI output capture / live filter (T30 F-02, F-06) | integration | — | 20:33 | 182 | #31 |
 | T28 history, time travel, semantic diff (+CR) | ui-2 / integration | 249 | 20:41 | 190 | #34 (#33) |
 
-In flight at 20:41 (T+190): T29 ui-2 (plan T+204), CR-T22B connect/save from the page, UIFIX (ui P0 specs, carries #35). Next: T31 release candidate (plan start T+249).
+| CR-T22B Connect/Create/Save from the page | integration | — | 21:06 | 215 | #36 |
+| CAPS Limen schedule/files capabilities | integration | — | 21:26 | 234 | #38 |
+| CRFINAL: T29 + UIFIX + #35/#37/#39 with CRs (chromium 95/95) | ui / ui-2 / integration | 204 (T29) | 21:53 | 262 | #40 |
+| T31 release candidate (113/613 P0 verified at b0ba767) | integration | 249 | 22:05 | 274 | #42 |
+| EXPVER exported expectedVersion fix | persistence | — | 22:06 | 275 | #41 |
+| Test sprint: ITESTS / DTESTS / PTESTS | integration / domain / persistence | — | 22:26–22:30 | 295–299 | #43 #44 #45 |
+| Test sprint: UTESTS / ITESTS2 | ui / integration | — | 22:38–22:43 | 307–312 | #46 #47 |
+| T32P reconcile defects (>250 commits, last read) | persistence | T32 | 22:43 | 312 | #48 |
+| T33 fresh pre-verdict review | reviewer | T33 | 22:55 | 324 | #49 |
+| CR-T33-F08 WebKit OPFS probe | integration | — | 22:59 | 328 | #50 |
+| T32W wired commands carry their body (+T33-F-07) | integration | T32 | 23:03 | 332 | #51 |
+
+In flight at 23:08 (T+337): T32L large-file read-back (persistence, T33-F-01), T34 final acceptance (integration). Merge freeze ≈23:45; coordinator ingest, token economics and FINAL-REPORT before 00:31:24Z.
+
+(Earlier note) In flight at 20:41 (T+190): T29 ui-2 (plan T+204), CR-T22B connect/save from the page, UIFIX (ui P0 specs, carries #35). Next: T31 release candidate (plan start T+249).
