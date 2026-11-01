@@ -2,9 +2,9 @@
   "schemaVersion": "1.0.0",
   "protocolVersion": "1.0.0",
   "repository": "indy-init-rehearsal-008",
-  "actor": "claude-code/integration",
+  "actor": "claude-code/ui",
   "startedAt": "2026-11-01T17:31:25.465Z",
-  "updatedAt": "2026-11-01T21:42:51.261Z",
+  "updatedAt": "2026-11-01T22:01:58.540Z",
   "baselineDirtyPaths": [],
   "workItems": [
     {
@@ -1716,6 +1716,47 @@
         }
       },
       "completedAt": "2026-11-01T21:42:51.261Z"
+    },
+    {
+      "id": "WI-R8-EXPVER",
+      "type": "task",
+      "state": "complete",
+      "semanticState": "complete",
+      "evidence": [
+        {
+          "type": "implementation",
+          "path": "src/Causa.App/Update.fs"
+        },
+        {
+          "type": "tests",
+          "path": "tests/Causa.App.Tests/StateMachines/SMNETWORK.fs"
+        }
+      ],
+      "updatedAt": "2026-11-01T22:01:58.540Z",
+      "telemetryExecutionIds": [
+        "EXE-20261101T215906732Z-4846a4b1"
+      ],
+      "latestCheckpoint": {
+        "id": "f6ec2d67c4ae467f9bfd2986",
+        "recordedAt": "2026-11-01T22:01:44.173Z",
+        "executionId": "EXE-20261101T215906732Z-4846a4b1",
+        "repository": "indy-init-rehearsal-008",
+        "branch": "r8/expver",
+        "commit": "d5aab7e355642393e038bef64014b556711e9fe3",
+        "remote": {
+          "name": "origin",
+          "url": "https://github.com/kemiller2002/indy-init-rehearsal-008"
+        },
+        "remoteBranch": "r8/expver",
+        "remoteCommit": "d5aab7e355642393e038bef64014b556711e9fe3",
+        "summary": "Root cause: host DomainCommand envelopes carry ExpectedVersion None and the engine stored them unchanged; AppEngine.decidedOn now stamps the decided version before SaveInput.Edit. SMNETWORK test added; CR-EXPVER-01 tightens browser spec.",
+        "nextAction": "integration merges PR",
+        "verification": {
+          "status": "verified",
+          "mechanism": "git-remote-observation"
+        }
+      },
+      "completedAt": "2026-11-01T22:01:58.540Z"
     }
   ]
 }
