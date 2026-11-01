@@ -1,7 +1,7 @@
 # Parse Playwright "list" reporter lines from a GitHub job log into {planId: outcome}
 import sys,re,json
 out={}
-pat=re.compile(r'\s(✓|✘|-|ok|x)\s+\d+\s+\[(\w+)\]\s+›\s+(\S+?):\d+:\d+\s+›\s+(.*?)(?:\s+\(\d+(?:\.\d+)?m?s\))?\s*$')
+pat=re.compile(r'\s(✓|✘|-|ok|x)\s+\d+\s+\[(\w+)\]\s+›\s+(\S+?):\d+:\d+\s+›\s+(.*?)(?:\s+\(\d+(?:\.\d+)?(?:ms|s|m|h)\))?\s*$')
 for f in sys.argv[2:]:
     for line in open(f,encoding='utf-8',errors='replace'):
         line=re.sub(r'\x1b\[[0-9;]*m','',line.rstrip('\n'))
