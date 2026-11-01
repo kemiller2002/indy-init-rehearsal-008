@@ -234,6 +234,63 @@ module FrozenData =
         |> List.fold (fun acc line -> acc |> Result.bind (fun h -> envelopeOf line |> Result.map (fun e -> e :: h))) (Ok [])
         |> Result.map List.rev
 
+    /// A JSON element as the kernel's v1 value (CONTRACT.md §2.3: integers only; anything else is not a v1 value).
+    let rec valueOf (e: JsonElement) : Result<V1Value, string> =
+        let all (items: Result<'a, string> list) =
+            List.foldBack (fun item acc -> Result.bind (fun xs -> Result.map (fun x -> x :: xs) item) acc) items (Ok [])
+
+        match e.ValueKind with
+        | JsonValueKind.Null -> Ok VNull
+        | JsonValueKind.True -> Ok(VBool true)
+        | JsonValueKind.False -> Ok(VBool false)
+        | JsonValueKind.String -> Ok(VText(e.GetString() |> string))
+        | JsonValueKind.Number ->
+            match e.TryGetInt64() with
+            | true, n -> Ok(VInt n)
+            | _ -> Error(sprintf "non-integer number %s" (e.GetRawText()))
+        | JsonValueKind.Array -> e.EnumerateArray() |> List.ofSeq |> List.map valueOf |> all |> Result.map VArray
+        | JsonValueKind.Object ->
+            e.EnumerateObject()
+            |> List.ofSeq
+            |> List.map (fun p -> valueOf p.Value |> Result.map (fun v -> p.Name, v))
+            |> all
+            |> Result.map VObject
+        | kind -> Error(sprintf "unexpected JSON %A" kind)
+
+    /// One events.ndjson line as the kernel's decoded v1 event (CONTRACT.md §5).
+    let v1EventOf (line: string) : Result<V1Event, string> =
+        try
+            use doc = JsonDocument.Parse line
+            let e = doc.RootElement
+
+            match envelopeOf line, str e "occurredAt", guidOf e "correlationId", e.TryGetProperty "actor", e.TryGetProperty "payload" with
+            | Ok envelope, Some occurredAt, Some correlation, (true, actor), (true, payload) ->
+                match valueOf actor, valueOf payload with
+                | Ok actor, Ok payload ->
+                    let (EventPayload eventType) = envelope.Payload
+
+                    Ok
+                        { EventId = envelope.EventId
+                          Investigation = envelope.Investigation
+                          Version = envelope.Version
+                          EventType = eventType
+                          OccurredAt = occurredAt
+                          Actor = actor
+                          CorrelationId = correlation
+                          Payload = payload }
+                | Error reason, _
+                | _, Error reason -> Error reason
+            | Error reason, _, _, _, _ -> Error reason
+            | _ -> Error "an event line lacks occurredAt, correlationId, actor or payload"
+        with :? JsonException as ex ->
+            Error ex.Message
+
+    let v1HistoryOf (ndjson: string) : Result<V1Event list, string> =
+        ndjson.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        |> List.ofArray
+        |> List.fold (fun acc line -> acc |> Result.bind (fun h -> v1EventOf line |> Result.map (fun e -> e :: h))) (Ok [])
+        |> Result.map List.rev
+
     let lifecycleName (lifecycle: InvestigationLifecycle) =
         match lifecycle with
         | Draft -> "draft"
@@ -269,8 +326,6 @@ module FrozenData =
               "CAUSA.EVENT_ID_DUPLICATE"
               "CAUSA.VERSION_STALE" ]
 
-let private frozenPolicy: PolicySet = { Id = Policies.defaultPolicyId }
-let private frozenActor: ActorContext = { ActorId = "investigator-01" }
 
 [<Fact>]
 let FrozenFixturesReplay () =
@@ -328,28 +383,32 @@ let FrozenFixturesReplay () =
                 let golden = FrozenData.json root (sprintf "contract/v1.0.0/golden/%s.state.json" key)
 
                 let failures =
-                    match FrozenData.historyOf ndjson with
+                    match FrozenData.v1HistoryOf ndjson with
                     | Error reason -> [ sprintf "%s: the frozen history does not decode: %s" key reason ]
                     | Ok history ->
-                        match Kernel.replayState history with
-                        | Error error -> [ sprintf "%s: Kernel.replayState refused the frozen history: %A" key error ]
+                        match StorageV1Replay.replay history with
+                        | Error refusal -> [ sprintf "%s: the kernel refused the frozen history: %s %A" key (StorageV1Replay.refusalCode refusal) refusal ]
                         | Ok state ->
                             let (AggregateVersion version) = state.Version
+                            let projected = StorageV1Replay.stateObject state
+                            let count name = match StorageV1Replay.field name projected with VArray xs -> xs.Length | _ -> -1
+                            let digest = StorageV1Replay.stateSha256 state
+                            let goldenDigest = FrozenData.canonicalSha root (sprintf "contract/v1.0.0/golden/%s.state.json" key)
 
                             [ FrozenData.number entry "expectedVersion" <> Some version, sprintf "version %d, expected %A" version (FrozenData.number entry "expectedVersion")
-                              FrozenData.text entry "expectedLifecycle" <> Some(FrozenData.lifecycleName state.Lifecycle),
-                              sprintf "lifecycle %s, expected %A" (FrozenData.lifecycleName state.Lifecycle) (FrozenData.text entry "expectedLifecycle")
-                              FrozenData.arrayLength golden "observations" <> state.Observations,
-                              sprintf "observations %d, golden %d" state.Observations (FrozenData.arrayLength golden "observations")
-                              FrozenData.arrayLength golden "hypotheses" <> state.Hypotheses,
-                              sprintf "hypotheses %d, golden %d" state.Hypotheses (FrozenData.arrayLength golden "hypotheses")
-                              FrozenData.arrayLength golden "conclusions" <> state.Conclusions,
-                              sprintf "conclusions %d, golden %d" state.Conclusions (FrozenData.arrayLength golden "conclusions")
-                              // The golden projection is compared byte for byte by its digest (expectedStateSha256).
-                              // The kernel exposes no canonical state projection, so it cannot be compared: a failure,
-                              // never a skip.
-                              true,
-                              "expectedStateSha256 not compared: the kernel has no canonical causa-storage state projection" ]
+                              FrozenData.text entry "expectedLifecycle" <> Some state.Lifecycle,
+                              sprintf "lifecycle %s, expected %A" state.Lifecycle (FrozenData.text entry "expectedLifecycle")
+                              FrozenData.arrayLength golden "observations" <> count "observations",
+                              sprintf "observations %d, golden %d" (count "observations") (FrozenData.arrayLength golden "observations")
+                              FrozenData.arrayLength golden "hypotheses" <> count "hypotheses",
+                              sprintf "hypotheses %d, golden %d" (count "hypotheses") (FrozenData.arrayLength golden "hypotheses")
+                              FrozenData.arrayLength golden "conclusions" <> count "conclusions",
+                              sprintf "conclusions %d, golden %d" (count "conclusions") (FrozenData.arrayLength golden "conclusions")
+                              // The golden projection is compared byte for byte by its digest (§8.4): the manifest's
+                              // expectedStateSha256 and the canonical digest of the golden state file.
+                              FrozenData.text entry "expectedStateSha256" <> Some digest,
+                              sprintf "state sha256 %s, expectedStateSha256 %A" digest (FrozenData.text entry "expectedStateSha256")
+                              goldenDigest <> Ok digest, sprintf "state sha256 %s, golden file %A" digest goldenDigest ]
                             |> List.filter fst
                             |> List.map (fun (_, reason) -> sprintf "%s: %s" key reason)
 
@@ -362,6 +421,15 @@ let FrozenFixturesReplay () =
         let negativeDir = IO.Path.Combine(root, "fixtures/v1.0.0/negative")
         let negatives = IO.Directory.GetFiles(negativeDir, "*.json") |> Array.sort |> List.ofArray
         Assert.Equal(90, negatives.Length)
+
+        // The kernel's share of the negatives (replay preconditions, admissibility, stale version): 40 of the 90.
+        let kernelNegatives =
+            negatives
+            |> List.filter (fun path ->
+                let fixture = FrozenData.json root (IO.Path.GetRelativePath(root, path))
+                FrozenData.text fixture "expectedErrorCode" |> Option.exists FrozenData.domainCodes.Contains)
+
+        Assert.Equal(40, kernelNegatives.Length)
 
         let negativeFailures =
             if not (List.isEmpty goldenFailures) then
@@ -383,23 +451,27 @@ let FrozenFixturesReplay () =
                         let ndjson = IO.File.ReadAllText(IO.Path.Combine(root, sprintf "fixtures/v1.0.0/investigations/%s/events.ndjson" id))
                         let stale = FrozenData.number fixture "expectedAggregateVersion" |> Option.defaultValue 0L
 
-                        match FrozenData.historyOf ndjson, FrozenData.historyOf (decode (fixture.GetProperty "appendedEvents")) with
-                        | Ok history, Ok [ appended ] ->
-                            let command =
-                                { CommandId = Guid.NewGuid()
-                                  Investigation = appended.Investigation
-                                  ExpectedVersion = Some(AggregateVersion stale) }
-
-                            match Kernel.decideOn frozenPolicy frozenActor history { Envelope = command; Command = RecordObservation } with
-                            | Conflict _ -> None
-                            | other -> Some(sprintf "%s (%s): decided %A, not a version conflict" name code other)
+                        match FrozenData.v1HistoryOf ndjson, FrozenData.v1HistoryOf (decode (fixture.GetProperty "appendedEvents")) with
+                        | Ok history, Ok [ _ ] ->
+                            match StorageV1Replay.replay history with
+                            | Error refusal -> Some(sprintf "%s (%s): the base history does not replay: %A" name code refusal)
+                            | Ok state ->
+                                match StorageV1Replay.checkAppend (AggregateVersion stale) state with
+                                | Some(Conflict _) -> None
+                                | other -> Some(sprintf "%s (%s): decided %A, not a version conflict" name code other)
                         | _ -> Some(sprintf "%s (%s): the base history or the appended event does not decode" name code)
                     else
-                        match FrozenData.historyOf (decode ((fixture.GetProperty "files").GetProperty "events.ndjson")) with
+                        let domainCode = FrozenData.text fixture "expectedDomainCode"
+
+                        match FrozenData.v1HistoryOf (decode ((fixture.GetProperty "files").GetProperty "events.ndjson")) with
                         | Error reason -> Some(sprintf "%s (%s): the history does not decode, so the kernel never saw it: %s" name code reason)
                         | Ok history ->
-                            match Kernel.replayState history with
-                            | Ok _ -> Some(sprintf "%s (%s): Kernel.replayState accepted an inadmissible history" name code)
+                            match StorageV1Replay.replay history with
+                            | Ok _ -> Some(sprintf "%s (%s): the kernel accepted an inadmissible history" name code)
+                            | Error refusal when StorageV1Replay.refusalCode refusal <> code ->
+                                Some(sprintf "%s: refused as %s (%A), expected %s" name (StorageV1Replay.refusalCode refusal) refusal code)
+                            | Error(V1HistoryInadmissible(actual, _, detail)) when domainCode.IsSome && domainCode <> Some actual ->
+                                Some(sprintf "%s: domain code %s (%s), expected %A" name actual detail domainCode)
                             | Error _ -> None)
 
         // 5. The seed is unchanged after the run (STORAGE-007, ADRP-005-O2).
