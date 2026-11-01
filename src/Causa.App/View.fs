@@ -109,6 +109,11 @@ module View =
         let graph = Views.Graph.project workspace.History
         flat graph.Keys @ (graph.Lists |> List.map (fun (name, rows) -> name, Rows rows))
 
+    /// The report preview's keys and lists (Views/Report.fs, ui-2, WI-R8-T26), from the same history the workspace replays.
+    let private reportKeys (workspace: Workspace) : ShellView =
+        let report = Views.Report.view Workspace.policy Workspace.actor workspace.History
+        flat report.Keys @ (report.Lists |> List.map (fun (name, rows) -> name, Rows rows))
+
     /// Pure: state to the complete view.
     let render (state: ShellState) : ShellView =
         [ "engine", Text EngineName
@@ -119,3 +124,4 @@ module View =
         @ shellKeys state.Hash
         @ flat (renderWorkspace state.Hash state.Workspace)
         @ graphKeys state.Workspace
+        @ reportKeys state.Workspace

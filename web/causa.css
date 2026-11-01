@@ -185,3 +185,72 @@ html[data-engine="failed"] .causa-loading-indicator {
   border-inline-start: var(--ef-focus-ring-width) solid var(--ef-color-border-subtle);
   padding-inline-start: var(--ef-layout-stack-space);
 }
+
+/* WI-R8-T26: the report preview (S22). Folio's print components are light-DOM elements; on screen they take the
+   page's Forma typography, in print Folio's print stylesheet (linked with media="print") lays them out. */
+.causa-report-document,
+.causa-report-document ef-print-section,
+.causa-report-document ef-print-callout,
+.causa-report-document ef-print-note,
+.causa-report-document ef-print-table {
+  display: block;
+}
+
+.causa-report-document {
+  display: grid;
+  gap: var(--ef-layout-stack-space);
+  padding: var(--ef-layout-gutter);
+  border: var(--ef-focus-ring-width) solid var(--ef-color-border-subtle);
+}
+
+.causa-report-kind {
+  margin: 0;
+  font-weight: bold;
+}
+
+.causa-report-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ef-layout-stack-space);
+  margin: 0;
+}
+
+.causa-report-meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.causa-report-document ef-print-callout,
+.causa-report-document ef-print-note {
+  padding-inline-start: var(--ef-layout-stack-space);
+  border-inline-start: var(--ef-focus-ring-width) solid var(--ef-color-border-subtle);
+}
+
+.causa-report-document ef-print-table {
+  overflow-x: auto;
+}
+
+.causa-report-document td {
+  overflow-wrap: anywhere;
+}
+
+/* Print: only the report. Every element that neither holds the report nor is part of it is left out, and the report's
+   containers print as plain blocks, so Folio's page layout applies. Text stays text, so it is legible in grayscale. */
+@media print {
+  body :not(:has([data-causa-report])):not([data-causa-report]):not([data-causa-report] *) {
+    display: none !important;
+  }
+
+  body :has([data-causa-report]):not([hidden]) {
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    max-inline-size: none !important;
+  }
+
+  .causa-report-document {
+    border: 0;
+    padding: 0;
+  }
+}
