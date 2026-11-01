@@ -45,6 +45,12 @@
 | CR-T33-F08 WebKit OPFS probe | integration | — | 22:59 | 328 | #50 |
 | T32W wired commands carry their body (+T33-F-07) | integration | T32 | 23:03 | 332 | #51 |
 
-In flight at 23:08 (T+337): T32L large-file read-back (persistence, T33-F-01), T34 final acceptance (integration). Merge freeze ≈23:45; coordinator ingest, token economics and FINAL-REPORT before 00:31:24Z.
+| T32L large-file read-back (T33-F-01) | persistence | T32 | 23:05 | 334 | #52 |
+| T34 acceptance at c61bfe2 (256/613 verified; INVALID) | integration | T34 | 23:18 | 347 | #53 |
+| FINALDET deterministic bound tests (tests only) | integration | — | 23:25 | 354 | #54 |
+| FINALUI chromium bound specs (tests only) | ui | — | 23:30 | 359 | #55 |
+| T34 acceptance at final candidate 5e27176 (266/613 verified; INVALID) | integration | T34 | 23:50 | 379 | #56 |
+
+Merge freeze 23:50:28Z (T+379). Coordinator ingest 23:50:44Z; WI-R8-COORD complete; token economics and FINAL-REPORT ~23:55Z. Hard stop 00:31:24Z.
 
 (Earlier note) In flight at 20:41 (T+190): T29 ui-2 (plan T+204), CR-T22B connect/save from the page, UIFIX (ui P0 specs, carries #35). Next: T31 release candidate (plan start T+249).
