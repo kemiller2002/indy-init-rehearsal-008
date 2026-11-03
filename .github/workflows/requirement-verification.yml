@@ -65,9 +65,9 @@ jobs:
           dotnet build .verification/praxis/src/Praxis.Cli -c Release
           dotnet build .verification/dokimos/src/Dokimos.Cli -c Release
           dotnet build .verification/ordo/src/Sde.Cli -c Release
-          echo "PRAXIS=$(ls .verification/praxis/src/Praxis.Cli/bin/Release/net10.0/praxis.dll)" >> "$GITHUB_ENV"
-          echo "DOKIMOS=$(ls .verification/dokimos/src/Dokimos.Cli/bin/Release/net8.0/Dokimos.Cli.dll)" >> "$GITHUB_ENV"
-          echo "SDE=$(ls .verification/ordo/src/Sde.Cli/bin/Release/*/sde.dll)" >> "$GITHUB_ENV"
+          echo "PRAXIS=$(realpath .verification/praxis/src/Praxis.Cli/bin/Release/net10.0/praxis.dll)" >> "$GITHUB_ENV"
+          echo "DOKIMOS=$(realpath .verification/dokimos/src/Dokimos.Cli/bin/Release/net8.0/Dokimos.Cli.dll)" >> "$GITHUB_ENV"
+          echo "SDE=$(realpath .verification/ordo/src/Sde.Cli/bin/Release/*/sde.dll)" >> "$GITHUB_ENV"
 
       - name: 1-2 Validate the requirements and compile the verification manifest
         shell: bash
