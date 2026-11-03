@@ -26,7 +26,7 @@ env:
   CATALOG_REPOSITORY: kemiller2002/Indy-init
   CATALOG_COMMIT: d6f5cb53ff3d43a158aad52a56ec696eba44dcb2
   CATALOG_PATH: requirements/catalogs/causa-investigation.requirement-catalog.json
-  PRAXIS_COMMIT: 7caa2923cbb636360eddb93dd4ebb656a63cd361
+  PRAXIS_COMMIT: b3e95c6b5b93347fbd4e55b3ed0cabf91ef1fba7
   DOKIMOS_COMMIT: 08224479a0aa6a0b08d84787a8859428fe8abcb2
   # Ordo 1.20.0 (main): its unchanged verification scheduler turns failed requirement IDs into ranked work.
   ORDO_COMMIT: db6d39ed2e7bc185a7fab6821677e7cd00201d8c
@@ -128,6 +128,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          set +e  # GitHub runs bash -e; exit 4 (not accepted) is a verdict to record, not a crash
           dotnet "$DOKIMOS" verification requirements \
             --manifest "$EVIDENCE/verification-manifest.json" \
             --observations "$EVIDENCE/observations" \
@@ -136,7 +137,11 @@ jobs:
             --out "$EVIDENCE/requirement-verification.json" \
             --ordo-evidence "$EVIDENCE/ordo" --run-id "${{ github.run_id }}-${{ github.run_attempt }}" \
             > /dev/null 2> "$EVIDENCE/requirement-verification.txt"
-          echo "exit=$?" >> "$GITHUB_OUTPUT"
+          status=$?
+          set -e
+          echo "exit=$status" >> "$GITHUB_OUTPUT"
+          # Only 0 (accepted) and 4 (not accepted) are verdicts; anything else means no trustworthy report.
+          if [ "$status" -ne 0 ] && [ "$status" -ne 4 ]; then cat "$EVIDENCE/requirement-verification.txt"; exit "$status"; fi
           cat "$EVIDENCE/requirement-verification.txt"
           {
             echo "## Requirement verification ($(jq -r .manifest.catalogId "$EVIDENCE/requirement-verification.json"))"
@@ -170,6 +175,7 @@ jobs:
         shell: bash
         run: |
           set -uo pipefail
+          set +e
           dotnet fsi tools/requirement-mutations.fsx -- \
             --manifest "$EVIDENCE/verification-manifest.json" --dokimos "$DOKIMOS" --out "$EVIDENCE/mutations.json"
           echo "exit=$?" >> "$GITHUB_OUTPUT"
