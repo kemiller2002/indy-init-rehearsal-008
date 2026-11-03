@@ -110,11 +110,21 @@
         <section aria-labelledby="causa-start-heading" data-bind-hidden="screenInvestigationStartHidden" hidden>
           <h2 id="causa-start-heading">New investigation</h2>
           <p>Connect a repository to save a new investigation.</p>
+          <!-- S01: the original problem statement and an optional title (INV-001, INV-002). Kept in this tab only: the
+               frozen investigation data contract has no place for them, so they are not saved to GitHub. -->
+          <section class="causa-start-description" aria-labelledby="causa-describe-heading" data-causa-start-description>
+            <h3 id="causa-describe-heading">What happened?</h3>
+            <label for="causa-problem-statement">Problem statement</label>
+            <textarea id="causa-problem-statement" name="statement" rows="4" data-requirement-id="INV-001" data-event="start.statement" data-bind-value="startStatement"></textarea>
+            <label for="causa-investigation-title">Title (optional)</label>
+            <input id="causa-investigation-title" name="title" data-requirement-id="INV-002" data-event="start.title" data-bind-value="startTitle">
+            <p class="causa-start-note" data-causa-start-note>Kept in this tab only: the problem statement and title are not saved to GitHub.</p>
+          </section>
           <!-- WI-R8-T22B (CR-T22B-2): Connect, open and create through the engine (IF41-APP). The token is sent to the
                engine once, kept only in this tab's memory and never bound back into the page, logged or stored. -->
           <section class="causa-connect" aria-labelledby="causa-connect-heading" data-causa-connect>
             <h3 id="causa-connect-heading">GitHub repository</h3>
-            <p role="status" data-causa-connect-status data-text="connectionStatus">Not connected</p>
+            <p role="status" data-requirement-id="INV-005" data-causa-connect-status data-text="connectionStatus">Not connected</p>
             <form data-causa-connect-form data-event="connect.submit" data-bind-hidden="connectFormHidden" autocomplete="off">
               <label>Owner <input name="owner" data-event="connect.owner" required></label>
               <label>Repository <input name="repository" data-event="connect.repository" required></label>
@@ -129,8 +139,8 @@
               <ef-button><button type="submit">Reconnect</button></ef-button>
             </form>
             <div data-causa-investigation-form data-bind-hidden="investigationFormHidden" hidden>
-              <label>Investigation identifier <input name="investigation" data-event="investigation.id"></label>
-              <ef-button><button type="button" data-event="investigation.open">Open</button></ef-button>
+              <label>Investigation identifier <input name="investigation" data-requirement-id="INV-006" data-event="investigation.id"></label>
+              <ef-button><button type="button" data-requirement-id="INV-017" data-event="investigation.open">Open</button></ef-button>
               <ef-button><button type="button" data-event="investigation.create">Create</button></ef-button>
               <ef-button><button type="button" data-event="connect.disconnect">Disconnect</button></ef-button>
             </div>
@@ -145,12 +155,12 @@
                  operation status (explanation and actions), freshness (commit time of the last confirmed save). -->
             <div class="ef-operation-status causa-save-indicator" data-causa-save-indicator data-bind-hidden="saveIndicatorHidden" hidden>
               <span class="ef-operation-status__symbol" aria-hidden="true" data-text="saveStateGlyph"></span>
-              <p><span class="ef-status-lozenge" data-bind-data-state="saveStateLozenge" data-causa-save-state data-text="saveStateLabel"></span>
+              <p><span class="ef-status-lozenge" data-bind-data-state="saveStateLozenge" data-requirement-id="INV-016" data-causa-save-state data-text="saveStateLabel"></span>
                 <span data-causa-save-text data-text="saveStateText"></span></p>
               <p class="ef-freshness" data-bind-hidden="saveFreshnessHidden" hidden><span class="ef-freshness__label">Last confirmed save</span>
                 <time data-bind-datetime="saveFreshnessDateTime" data-text="saveFreshnessText"></time></p>
               <div class="ef-operation-status__actions">
-                <ef-button data-bind-hidden="saveActionSaveHidden" hidden><button type="button" data-event="save.Save">Save</button></ef-button>
+                <ef-button data-bind-hidden="saveActionSaveHidden" hidden><button type="button" data-requirement-id="INV-015" data-event="save.Save">Save</button></ef-button>
                 <ef-button data-bind-hidden="saveActionRetryHidden" hidden><button type="button" data-event="save.Retry">Retry</button></ef-button>
                 <ef-button data-bind-hidden="saveActionReconnectHidden" hidden><button type="button" data-event="save.Reconnect">Reconnect</button></ef-button>
                 <ef-button data-bind-hidden="saveActionCheckAgainHidden" hidden><button type="button" data-event="save.CheckAgain">Check again</button></ef-button>
@@ -163,8 +173,13 @@
             <p class="ef-visually-hidden" role="status" aria-live="polite" data-causa-save-polite data-text="saveStatePoliteText"></p>
             <p class="ef-visually-hidden" role="alert" aria-live="assertive" data-causa-save-assertive data-text="saveStateAssertiveText"></p>
             <p class="causa-unsaved">Not saved. This investigation exists only in this tab until a repository is connected.</p>
+            <!-- S01, R1.2, A96: the original text, inspectable as it was entered (INV-008); kept in this tab only. -->
+            <dl class="causa-original" data-causa-original data-bind-hidden="originalHidden" hidden>
+              <div><dt>Problem statement</dt><dd data-requirement-id="INV-008" data-text="originalStatement" data-causa-original-statement></dd></div>
+              <div><dt>Title</dt><dd data-text="originalTitle" data-causa-original-title></dd></div>
+            </dl>
             <dl class="causa-projection" data-causa-region="summary" data-bind-data-projection-version="projectionVersion">
-              <div><dt>State</dt><dd data-text="investigationLifecycle" data-causa-lifecycle>No investigation</dd></div>
+              <div><dt>State</dt><dd data-text="investigationLifecycle" data-requirement-id="INV-018" data-causa-lifecycle>No investigation</dd></div>
               <div><dt>Version</dt><dd data-text="projectionVersion" data-causa-version>0</dd></div>
               <div><dt>Observations</dt><dd data-text="observationCount">0</dd></div>
               <div><dt>Hypotheses</dt><dd data-text="hypothesisCount">0</dd></div>
@@ -184,11 +199,11 @@
             </section>
             <section aria-labelledby="causa-hypotheses-heading" data-causa-region="hypotheses" data-bind-data-projection-version="projectionVersion" data-bind-hidden="regionHypothesesHidden">
               <h4 id="causa-hypotheses-heading">Hypotheses</h4>
-              <p data-text="hypothesisList" data-causa-hypothesis-list>No hypothesis recorded yet.</p>
+              <p data-text="hypothesisList" data-requirement-id="INV-010" data-causa-hypothesis-list>No hypothesis recorded yet.</p>
             </section>
             <section aria-labelledby="causa-evidence-heading" data-causa-region="evidence" data-bind-data-projection-version="projectionVersion" data-bind-hidden="regionEvidenceHidden">
               <h4 id="causa-evidence-heading">Evidence</h4>
-              <p data-text="evidenceList" data-causa-evidence-list>No evidence recorded yet.</p>
+              <p data-text="evidenceList" data-requirement-id="INV-013" data-causa-evidence-list>No evidence recorded yet.</p>
             </section>
             <section aria-labelledby="causa-conclusions-heading" data-causa-region="conclusions" data-bind-data-projection-version="projectionVersion" data-bind-hidden="regionConclusionsHidden">
               <h4 id="causa-conclusions-heading">Conclusions</h4>
@@ -210,13 +225,13 @@
               </dl>
             </aside>
             <ul class="causa-commands" data-causa-region="capabilities" data-bind-data-projection-version="projectionVersion">
-              <li><ef-button><button type="button" data-event="submit.StartInvestigation">Start investigation</button></ef-button>
+              <li><ef-button><button type="button" data-requirement-id="INV-004" data-event="submit.StartInvestigation">Start investigation</button></ef-button>
                 <span class="causa-capability" data-causa-capability="StartInvestigation" data-text="capabilityStartInvestigation"></span></li>
-              <li><ef-button><button type="button" data-event="submit.RecordObservation">Record an observation</button></ef-button>
+              <li><ef-button><button type="button" data-requirement-id="INV-014" data-event="submit.RecordObservation">Record an observation</button></ef-button>
                 <span class="causa-capability" data-causa-capability="RecordObservation" data-text="capabilityRecordObservation"></span></li>
               <li><ef-button><button type="button" data-event="submit.ActivateInvestigation">Activate</button></ef-button>
                 <span class="causa-capability" data-causa-capability="ActivateInvestigation" data-text="capabilityActivateInvestigation"></span></li>
-              <li><ef-button><button type="button" data-event="submit.RecordHypothesis">Record a hypothesis</button></ef-button>
+              <li><ef-button><button type="button" data-requirement-id="INV-009" data-event="submit.RecordHypothesis">Record a hypothesis</button></ef-button>
                 <span class="causa-capability" data-causa-capability="RecordHypothesis" data-text="capabilityRecordHypothesis"></span></li>
               <li><ef-button><button type="button" data-event="submit.RecordConclusion">Record a conclusion</button></ef-button>
                 <span class="causa-capability" data-causa-capability="RecordConclusion" data-text="capabilityRecordConclusion"></span></li>
