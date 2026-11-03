@@ -113,6 +113,10 @@ type Tab =
       Branch: string
       Token: string
       InvestigationText: string
+      /// S01: the problem statement and title being typed (tab memory only; INV-001, INV-002).
+      StartDraft: Views.InvestigationStart.Draft
+      /// S01, R1.2: the original text as it was when the investigation started (INV-008).
+      Original: Views.InvestigationStart.Original option
       Notice: string
       /// WI-R8-CAPS: the capabilities the handshake selected (empty with a legacy host).
       Capabilities: Set<string>
@@ -282,6 +286,8 @@ module Program =
           Branch = "main"
           Token = ""
           InvestigationText = ""
+          StartDraft = Views.InvestigationStart.empty
+          Original = None
           Notice = ""
           Capabilities = Set.empty
           NextCorrelation = 1L
@@ -342,6 +348,8 @@ module Program =
             | None -> { disconnected with Active = None; Creation = None; Commands = retained disconnected }, effects
             | Some _ -> disconnected, effects
         | "investigation.id" -> { tab with InvestigationText = v }, []
+        | "start.statement" -> { tab with StartDraft = Views.InvestigationStart.withStatement v tab.StartDraft }, []
+        | "start.title" -> { tab with StartDraft = Views.InvestigationStart.withTitle v tab.StartDraft }, []
         | "investigation.open" ->
             match investigationOf tab.InvestigationText with
             | Some id -> run { tab with Active = Some id; Notice = "" } (LoadStep(id, Causa.Persistence.LoadInput.OpenRequested id))
@@ -353,6 +361,7 @@ module Program =
             { tab with
                 Engine = model
                 Creation = Some creation
+                Original = Views.InvestigationStart.captureOnce tab.StartDraft tab.Original
                 Active = Some id
                 InvestigationText = (let (InvestigationId g) = id in g.ToString "D")
                 Notice = "Creating the investigation on GitHub." },
@@ -371,6 +380,11 @@ module Program =
         | "save.ExportMine"
         | "conflict.Export" -> onActive tab (fun id -> ConflictStep(id, Causa.Persistence.ConflictInput.ExportChosen))
         | "conflict.Retry" -> onActive tab (fun id -> ConflictStep(id, Causa.Persistence.ConflictInput.ReadAgain))
+        | name when name = Workspace.eventName StartInvestigation && tab.Active.IsNone ->
+            // The tab-local start (the shell decided it before this edge ran): keep the original text once the kernel
+            // has started the investigation, never for a refused start.
+            if tab.Shell.Workspace.History.IsEmpty then tab, []
+            else { tab with Original = Views.InvestigationStart.captureOnce tab.StartDraft tab.Original }, []
         | _ ->
             // A command for a wired investigation goes to its save session (DomainCommand, CR-T17-01). The frozen
             // envelope carries no body (DEV-R8-09), so the tab keeps the body by the command's identity and the engine
@@ -512,7 +526,9 @@ module Program =
             [ "connectTokenShown", Flag(tab.Engine.Connection = Disconnected)
               "reconnectTokenShown", Flag(tab.Engine.Connection = CredentialRefused) ]
 
-        shell @ admin @ added @ tokenFields @ [ "liveAnnouncement", Text(String.concat " " announcements) ]
+        let start = flat (Views.InvestigationStart.keys tab.StartDraft tab.Original)
+
+        shell @ admin @ added @ tokenFields @ start @ [ "liveAnnouncement", Text(String.concat " " announcements) ]
 
     let private writeValue (w: Utf8JsonWriter) (name: string) (value: ViewValue) =
         match value with

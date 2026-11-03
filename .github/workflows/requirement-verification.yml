@@ -1,0 +1,210 @@
+name: Requirement verification
+
+# Requirement-level verification of the investigation workflow (CAT-CAUSA-INVESTIGATION):
+#   1 validate requirements, 2 compile the manifest (Praxis), 3 build, 4 unit tests, 5 component tests,
+#   6 browser verification, 7 lifecycle (save and reopen against an in-memory GitHub), 8 reconcile every
+#   required ID (Dokimos), 9 publish the evidence, 10 evaluate acceptance.
+# The manifest is compiled from the requirements repository, never from this one: the application cannot reduce
+# its obligations by omitting a field, a component or a test. Evidence is published before acceptance is decided,
+# and a step that cannot run fails the job (it is never read as success).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # The authoritative catalog and the tools that compile and verify it, each pinned to an exact commit.
+  CATALOG_REPOSITORY: kemiller2002/Indy-init
+  CATALOG_COMMIT: d6f5cb53ff3d43a158aad52a56ec696eba44dcb2
+  CATALOG_PATH: requirements/catalogs/causa-investigation.requirement-catalog.json
+  PRAXIS_COMMIT: b3e95c6b5b93347fbd4e55b3ed0cabf91ef1fba7
+  DOKIMOS_COMMIT: 08224479a0aa6a0b08d84787a8859428fe8abcb2
+  # Ordo 1.20.0 (main): its unchanged verification scheduler turns failed requirement IDs into ranked work.
+  ORDO_COMMIT: db6d39ed2e7bc185a7fab6821677e7cd00201d8c
+  EVIDENCE: evidence-out
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      accepted: ${{ steps.accept.outputs.accepted }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out the requirements, Praxis and Dokimos at their pinned commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          fetch() { git init -q "$2"; git -C "$2" fetch -q --depth 1 "https://github.com/$1" "$3"; git -C "$2" checkout -q FETCH_HEAD; }
+          fetch "$CATALOG_REPOSITORY" .verification/requirements "$CATALOG_COMMIT"
+          fetch kemiller2002/praxis .verification/praxis "$PRAXIS_COMMIT"
+          fetch kemiller2002/dokimos .verification/dokimos "$DOKIMOS_COMMIT"
+          fetch kemiller2002/ordo .verification/ordo "$ORDO_COMMIT"
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Build the Praxis compiler and the Dokimos verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet build .verification/praxis/src/Praxis.Cli -c Release
+          dotnet build .verification/dokimos/src/Dokimos.Cli -c Release
+          dotnet build .verification/ordo/src/Sde.Cli -c Release
+          echo "PRAXIS=$(realpath .verification/praxis/src/Praxis.Cli/bin/Release/net10.0/praxis.dll)" >> "$GITHUB_ENV"
+          echo "DOKIMOS=$(realpath .verification/dokimos/src/Dokimos.Cli/bin/Release/net8.0/Dokimos.Cli.dll)" >> "$GITHUB_ENV"
+          echo "SDE=$(realpath .verification/ordo/src/Sde.Cli/bin/Release/*/sde.dll)" >> "$GITHUB_ENV"
+
+      - name: 1-2 Validate the requirements and compile the verification manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE"
+          start=$(date +%s%N)
+          dotnet "$PRAXIS" requirements manifest compile \
+            --catalog ".verification/requirements/$CATALOG_PATH" \
+            --source-commit "$CATALOG_COMMIT" \
+            --mappings requirements/requirement-implementation-map.json \
+            --output "$EVIDENCE/verification-manifest.json" \
+            --findings "$EVIDENCE/catalog-findings.json"
+          echo "manifest compiled in $(( ($(date +%s%N) - start) / 1000000 )) ms" | tee "$EVIDENCE/timings.txt"
+          dotnet "$PRAXIS" requirements manifest check \
+            --catalog ".verification/requirements/$CATALOG_PATH" \
+            --manifest "$EVIDENCE/verification-manifest.json" \
+            --mappings requirements/requirement-implementation-map.json
+          echo "MANIFEST_HASH=$(jq -r .contentHash "$EVIDENCE/verification-manifest.json")" >> "$GITHUB_ENV"
+
+      - name: 3 Build the application
+        run: dotnet build Causa.slnx -c Release
+      - name: 4-5 Unit and component tests (engine, views and state machines)
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          output=$(dotnet test tests/Causa.App.Tests -c Release --no-build 2>&1)
+          status=$?
+          echo "$output"
+          if [ "$status" -ne 0 ]; then exit "$status"; fi
+          echo "$output" | grep -qE 'Passed:[[:space:]]*[1-9]' || { echo "::error::No test passed. An empty test run is not a pass."; exit 1; }
+
+      - name: Install browser dependencies
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+      - name: 6-7 Browser verification and lifecycle probes
+        shell: bash
+        env:
+          REQUIREMENT_MANIFEST: ${{ github.workspace }}/evidence-out/verification-manifest.json
+          REQUIREMENT_SOURCE_COMMIT: ${{ github.sha }}
+          REQUIREMENT_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+          REQUIREMENT_OBSERVATIONS_DIR: ${{ github.workspace }}/evidence-out/observations
+          PLAYWRIGHT_JSON_OUTPUT_NAME: ${{ github.workspace }}/evidence-out/playwright.json
+        run: |
+          set -uo pipefail
+          start=$(date +%s)
+          npx playwright test --project=chromium tests/browser/requirements --reporter=list,json
+          status=$?
+          echo "probes ran in $(( $(date +%s) - start )) s (exit $status)" | tee -a "$EVIDENCE/timings.txt"
+          # A probe test that failed is judged FAIL by Dokimos from the results file; only a missing results file is
+          # an infrastructure failure, and Dokimos reports that as BLOCKED, never PASS.
+          test -f "$EVIDENCE/playwright.json"
+
+      - name: 8 Reconcile every required ID against the evidence
+        id: reconcile
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e  # GitHub runs bash -e; exit 4 (not accepted) is a verdict to record, not a crash
+          dotnet "$DOKIMOS" verification requirements \
+            --manifest "$EVIDENCE/verification-manifest.json" \
+            --observations "$EVIDENCE/observations" \
+            --results "$EVIDENCE/playwright.json" \
+            --root . --candidate "${{ github.sha }}" \
+            --out "$EVIDENCE/requirement-verification.json" \
+            --ordo-evidence "$EVIDENCE/ordo" --run-id "${{ github.run_id }}-${{ github.run_attempt }}" \
+            > /dev/null 2> "$EVIDENCE/requirement-verification.txt"
+          status=$?
+          set -e
+          echo "exit=$status" >> "$GITHUB_OUTPUT"
+          # Only 0 (accepted) and 4 (not accepted) are verdicts; anything else means no trustworthy report.
+          if [ "$status" -ne 0 ] && [ "$status" -ne 4 ]; then cat "$EVIDENCE/requirement-verification.txt"; exit "$status"; fi
+          cat "$EVIDENCE/requirement-verification.txt"
+          {
+            echo "## Requirement verification ($(jq -r .manifest.catalogId "$EVIDENCE/requirement-verification.json"))"
+            echo
+            jq -r '"Manifest `\(.manifest.contentHash)`, source commit `\(.manifest.sourceCommit)`, candidate `\(.candidate)`\n\n| applicable | implemented | verified | failed | blocked | not run | not applicable | verified % |\n|---|---|---|---|---|---|---|---|\n| \(.summary.applicable) | \(.summary.implemented) | \(.summary.verified) | \(.summary.failed) | \(.summary.blocked) | \(.summary.notRun) | \(.summary.notApplicable) | \(.summary.verifiedPercent) |\n"' "$EVIDENCE/requirement-verification.json"
+            echo "| ID | Requirement | Status | Class |"
+            echo "|---|---|---|---|"
+            jq -r '.requirements[] | "| \(.id) | \(.name) | \(.status) | \(.failureClass // "") |"' "$EVIDENCE/requirement-verification.json"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Corrective work from the failed requirement IDs (Ordo verification schedule)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd "$EVIDENCE/ordo"
+          dotnet "$SDE" verification schedule --plan verification-plan.json --evidence-manifest evidence-manifest.json \
+            --source-sha "${{ github.sha }}" --run-id "${{ github.run_id }}-${{ github.run_attempt }}" \
+            --output ../ordo-schedule.json --json > /dev/null
+          {
+            echo "### Corrective work (Ordo)"
+            echo
+            echo "Acceptance blockers: $(jq -r '.acceptanceBlockers | join(", ")' ../ordo-schedule.json)"
+            echo
+            echo "| Rank | Requirement | Blocker | Open work |"
+            echo "|---|---|---|---|"
+            jq -r '.requirements[] | "| \(.rank) | \(.id) | \(.acceptanceBlocker) | \([.obligations[] | select(.state != "satisfied")] | length) |"' ../ordo-schedule.json
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Mutation runs (the verifier must catch a removed, hidden, disabled or duplicated field and a removed test)
+        id: mutations
+        shell: bash
+        run: |
+          set -uo pipefail
+          set +e
+          dotnet fsi tools/requirement-mutations.fsx -- \
+            --manifest "$EVIDENCE/verification-manifest.json" --dokimos "$DOKIMOS" --out "$EVIDENCE/mutations.json"
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+
+      - name: 9 Publish the verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: requirement-verification-${{ github.sha }}
+          path: evidence-out/
+          if-no-files-found: error
+
+      - name: 10 Evaluate acceptance
+        id: accept
+        if: always()
+        shell: bash
+        run: |
+          set -uo pipefail
+          report="$EVIDENCE/requirement-verification.json"
+          if [ ! -f "$report" ]; then echo "::error::No verification report: acceptance cannot be evaluated."; exit 1; fi
+          accepted=$(jq -r .acceptance.accepted "$report")
+          echo "accepted=$accepted" >> "$GITHUB_OUTPUT"
+          if [ "${{ steps.mutations.outputs.exit }}" != "0" ]; then
+            echo "::error::The mutation runs did not all get caught (or did not run): the verifier itself is not trustworthy."
+            exit 1
+          fi
+          if [ "$accepted" != "true" ]; then
+            jq -r '.acceptance.blockers[]' "$report" | sed 's/^/::error::mandatory obligation not verified: /'
+            echo "::error::The investigation workflow is not verified: $(jq -r '.summary.verified' "$report") of $(jq -r '.summary.applicable' "$report") applicable requirements pass."
+            exit 1
+          fi
+          echo "Accepted: every mandatory obligation of every applicable requirement passed."
