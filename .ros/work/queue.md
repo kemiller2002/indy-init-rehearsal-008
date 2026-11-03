@@ -6,7 +6,7 @@
 | ROS-INSTALL-3-24-0 | ROS-INSTALL-3-24-0 | complete |  |  |
 | WI-0001 | Requirement-level verification of the investigation workflow (CAT-CAUSA-INVESTIGATION) | complete |  | medium |
 | WI-0002 | Fix UI-024-O4 regression: start-note copy must not say 'saved to GitHub' | ready |  | medium |
-| WI-0003 | CI: absolute tool paths so the Ordo step can run after cd | ready |  | medium |
+| WI-0003 | CI: absolute tool paths so the Ordo step can run after cd | complete |  | medium |
 | WI-R8-CAPS | WI-R8-CAPS | complete |  |  |
 | WI-R8-CICOUNTS | WI-R8-CICOUNTS | complete |  |  |
 | WI-R8-CILIVE | WI-R8-CILIVE | complete |  |  |
